@@ -3,7 +3,7 @@
 * npm install express@4
 * npm install socket.io
 
-# CI/CD Racing-Server deployment
+# CI/CD Senpai-Backend deployment
 
 Dieses Dokument enthält die wichtigsten Informationen über die server- und clientseitigen Funktionen. Standardfunktionen sind nicht aufgeführt.
 Im folgenden Format werden die Informationen dargestellt:
