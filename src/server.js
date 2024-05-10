@@ -1,3 +1,6 @@
+// Build Command: npm install
+// Start Command: npm start
+
 const express = require('express');
 const http = require('http');
 const socketIO = require('socket.io');
