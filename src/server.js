@@ -11,6 +11,12 @@ const PORT = process.env.PORT || 3000;
 const app = express();
 const server = http.createServer(app);
 const io = socketIO(server);
+const cors = require('cors');
+
+// Erlaube Anfragen von der Entwicklungs-Umgebung
+app.use(cors({
+    origin: 'https://senpai-development.onrender.com'
+}));
 
 // Verwende die Express-Routen
 app.use('/', rest);
