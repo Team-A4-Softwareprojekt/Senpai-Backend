@@ -35,7 +35,7 @@ router.get("/login", (request, response) => {
     console.log(password);
 
     // Datenbank SQL
-    client.query('SELECT * FROM player WHERE playername = $1 AND passwort = $2', [username, password], (err, res) => {
+    client.query('SELECT * FROM player WHERE playername = $1 AND playerpassword = $2', [username, password], (err, res) => {
         if (err) {
             console.log(err.stack);
             response.send(false);
