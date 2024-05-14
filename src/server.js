@@ -13,10 +13,12 @@ const server = http.createServer(app);
 const io = socketIO(server);
 const cors = require('cors');
 
+
 // Erlaube Anfragen von der Entwicklungs-Umgebung
 app.use(cors({
     origin: 'https://senpai-development.onrender.com'
 }));
+
 
 // Verwende die Express-Routen
 app.use('/', rest);
@@ -28,3 +30,7 @@ handleSocketEvents(io);
 server.listen(PORT, () => {
     console.log(`Server listening on port ${PORT}`);
 });
+
+
+//--------------Exports--------------//
+
