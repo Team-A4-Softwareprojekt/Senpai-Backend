@@ -34,6 +34,7 @@ router.get("/registration", (request, response) => {
     console.log(password);
     console.log(email);
 
+    // TODO: needs to be tested
     client.query('SELECT * FROM player WHERE playername = $1 or email = $2 ;', [username, email],(err, res) => {
         if(err){
             console.log(err.stack);
