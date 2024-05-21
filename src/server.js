@@ -16,7 +16,7 @@ const cors = require('cors');
 
 // Erlaube Anfragen von der Entwicklungs-Umgebung
 app.use(cors({
-    origin: 'https://senpai-development.onrender.com'
+    origin: 'https://senpai-frontend.onrender.com'
 }));
 
 
