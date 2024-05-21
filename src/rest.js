@@ -18,11 +18,39 @@ client.connect(undefined)
 
 
 router.get("/forgotPassword", (request, response) => {
-
+//TODO SQL Abfrage: select playersecurityquestion, securityquestionresponse from player where email=$1
+//oder select playersecurityquestion from player where email=$1
+//und select securityquestionresponse from player where email=$1
+//falls Abfragen nacheinander erfolgen sollen
+//zum pw ändern: update player set playerpassword=$2 where email=$1
 });
 
 router.get("/registration", (request, response) => {
     //Datenbank SQL
+    const username = request.query.username;
+    const password = request.query.password;
+    const email = request.query.email;    
+    console.log(username);
+    console.log(password);
+    console.log(email);
+
+    client.query('SELECT * FROM player WHERE playername = $1 or email = $2 ;', [username, email],(err, res) => {
+        if(err){
+            console.log(err.stack);
+            response.send(false);
+        }else{
+            if(res.rows.length === 0){
+                const currentDate = new Date();
+                const yesterday = new Date();
+                yesterday.setDate(currentDate.getDate()-1);
+                const yesterdayToString = yesterday.toISOString().slice(0,10);
+                client.query('INSERT INTO player (playername, playerpassword, rank, subscribed, streaktoday,missedstreak, playablegames, email) values ($1, $2, 1, false, false, $3, 3, $4);', [username, password, yesterdayToString, email]);
+                console.log(true);            
+            }else{
+                console.log(false);
+            }
+        }
+    })
 
     response.send('Registration');
 });
