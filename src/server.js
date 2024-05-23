@@ -13,10 +13,22 @@ const server = http.createServer(app);
 const io = socketIO(server);
 const cors = require('cors');
 
+const allowedOrigins = [
+    'https://senpai-development.onrender.com',
+    'https://senpai-website.onrender.com'
+];
+
 
 // Erlaube Anfragen von der Entwicklungs-Umgebung
 app.use(cors({
-    origin: 'https://senpai-frontend.onrender.com'
+    origin: function (origin, callback) {
+        // Prüft, ob der Ursprungsort in der Liste der zugelassenen Ursprünge enthalten ist
+        if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+            callback(null, true);
+        } else {
+            callback(new Error('Not allowed by CORS'));
+        }
+    }
 }));
 
 
