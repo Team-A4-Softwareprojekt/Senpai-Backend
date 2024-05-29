@@ -20,6 +20,7 @@ function handleSocketEvents(io) {
     const questions = {}; // Speichert die aktuellen Fragen pro Raum
     const answers = {}; // Speichert die Antworten der Spieler pro Raum
     const roundCounter = {}; // Zählt die Aufrufe von AWAIT_QUESTION pro Raum
+    const playerPoints = {} ; // Zählt die Punkte der Spieler eine Lobby
 
     io.on('connection', (socket) => {
         console.log("Socket-Id: " + socket.id);
@@ -31,6 +32,7 @@ function handleSocketEvents(io) {
             if (!room) {
                 room = `room-${socket.id}`;
                 rooms[room] = [];
+                playerPoints[room] = {};
             }
 
             socket.join(room);
@@ -39,6 +41,7 @@ function handleSocketEvents(io) {
             if (rooms[room].length === 2) {
                 io.to(room).emit('Buzzer_GameFound', true);
             }
+            playerPoints[room][socket.id] = 0;
         });
 
         socket.on('Leave_Buzzer_Queue', () => {
@@ -54,6 +57,7 @@ function handleSocketEvents(io) {
                 // If the room is now empty, delete it
                 if (rooms[room].length === 0) {
                     delete rooms[room];
+                    delete playerPoints[room];
                 }
 
                 socket.leave(room);
@@ -98,7 +102,7 @@ function handleSocketEvents(io) {
             if (!room) return;
 
             //hier muss sichergestellt werden, dass über questions[room].correctAnswer auf die Antwort zugegriffen werden kann
-            const correctAnswer = questions[room].correctAnswer;
+            const correctAnswer = questions[room].solution;
             answers[room] = answers[room] || {};
             answers[room][socket.id] = answer;
 
@@ -109,13 +113,22 @@ function handleSocketEvents(io) {
             // Spieler "buzzered" falsch -> Spieler "other" richtig -> Spieler "other" bekommt x Punkte
             // Spieler "buzzered" falsch -> Spieler "other" falsch -> Spieler "other" bekommt x Punkt
             // Spieler "buzzered" richtig -> Spieler "buzzered" bekommt x Punkte
-            if (answer === correctAnswer) {
-                socket.emit('CORRECT_ANSWER', correctAnswer);
+            if (answer === correctAnswer) { //antwort richtig
+                socket.emit('CORRECT_ANSWER');
+                console.log("correct answer")
                 // Add points logic here
+                playerPoints[room][socket.id] += 1;
+                playerPoints[room][otherPlayer] += 0;
+
+                resetRoomQuestion(socket);
+                io.to(otherPlayer).emit('ENABLE_BUZZER');
+                io.to(room).emit('END_ROUND');  //TODO: end round hier raus nehmen, nur die correct answer belassen
+            } else if (bothAnswered) {  //beide falsch?
+                resetRoomQuestion(socket);
+                io.to(otherPlayer).emit('ENABLE_BUZZER');
                 io.to(room).emit('END_ROUND');
-            } else if (bothAnswered) {
-                io.to(room).emit('END_ROUND');
-            } else {
+            } else { //antwort falsch, gegenspieler darf
+                socket.emit('WRONG_ANSWER');
                 io.to(otherPlayer).emit('ENABLE_BUZZER');
                 socket.emit('DISABLE_BUZZER');
             }
@@ -167,6 +180,11 @@ function handleSocketEvents(io) {
                 console.error("No question found in the database.");
             }
         });
+    }
+
+    function resetRoomQuestion(socket){
+        const room = getRoom(socket);
+        questions[room] = null;
     }
 
 }
