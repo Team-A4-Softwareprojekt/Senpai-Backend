@@ -14,6 +14,7 @@ const io = socketIO(server, {
     cors: {
         origin: [
             'http://localhost:5173',
+            'http://localhost:5174',
             'https://senpai-development.onrender.com',
             'https://senpai-website.onrender.com'
         ],
@@ -27,7 +28,8 @@ const cors = require('cors');
 const allowedOrigins = [
     'https://senpai-development.onrender.com',
     'https://senpai-website.onrender.com',
-    'http://localhost:5173'
+    'http://localhost:5173',
+    'http://localhost:5174'
 ];
 
 
