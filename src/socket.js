@@ -68,11 +68,11 @@ function handleSocketEvents(io) {
 
             roundCounter[room] = (roundCounter[room] || 0) + 1;
 
-            if (roundCounter[room] <= 3) {
+            
                 //Hier muss darauf geachtet werden, wie die Frage von der Datenbank zurückkommt
                 getQuestionFromDB((question, table) => {
                     questions[room] = question;
-                    io.to(room).emit('BUZZER_QUESTION_TYPE', question, table);
+                    io.to(room).emit('BUZZER_QUESTION_TYPE', table);
                     if (table === "multiplechoicequestion") {
                         io.to(room).emit('SHOW_QUESTION_MULTIPLE_CHOICE', question);
                     } else {
@@ -81,9 +81,7 @@ function handleSocketEvents(io) {
 
 
                 });
-            } else {
-                io.to(room).emit('END_GAME');
-            }
+            
         });
 
         socket.on('PLAYER_BUZZERED', () => {
