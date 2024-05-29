@@ -68,19 +68,19 @@ function handleSocketEvents(io) {
 
             roundCounter[room] = (roundCounter[room] || 0) + 1;
 
-            
-                //Hier muss darauf geachtet werden, wie die Frage von der Datenbank zurückkommt
-                getQuestionFromDB((question, table) => {
-                    questions[room] = question;
-                    io.to(room).emit('BUZZER_QUESTION_TYPE', table);
-                    if (table === "multiplechoicequestion") {
-                        io.to(room).emit('SHOW_QUESTION_MULTIPLE_CHOICE', question);
-                    } else {
-                        io.to(room).emit('SHOW_QUESTION_GAP_TEXT', question);
-                    }
-
-
-                });
+                if(!questions[room]){
+                    //Hier muss darauf geachtet werden, wie die Frage von der Datenbank zurückkommt
+                    getQuestionFromDB((question, table) => {
+                        questions[room] = question;
+                        io.to(room).emit('BUZZER_QUESTION_TYPE', table);
+                        if (table === "multiplechoicequestion") {
+                            io.to(room).emit('SHOW_QUESTION_MULTIPLE_CHOICE', question);
+                        } else {
+                            io.to(room).emit('SHOW_QUESTION_GAP_TEXT', question);
+                        }
+                    });
+                }
+                
             
         });
 
@@ -90,7 +90,7 @@ function handleSocketEvents(io) {
 
             const otherPlayer = rooms[room].find(id => id !== socket.id);
             io.to(otherPlayer).emit('DISABLE_BUZZER');
-            socket.emit('PICK_ANSWER');
+            //socket.emit('PICK_ANSWER');
         });
 
         socket.on('COMPARE_ANSWER', (answer) => {
@@ -146,13 +146,14 @@ function handleSocketEvents(io) {
     function getQuestionFromDB(callback) {
         // Zufällig eine Tabelle auswählen
         const tables = ['multiplechoicequestion', 'gaptextquestion'];
-        const selectedTable = tables[Math.floor(Math.random() * tables.length)];
+        //const selectedTable = tables[Math.floor(Math.random() * tables.length)];
+        const selectedTable = 'multiplechoicequestion';
 
         console.log(selectedTable)
 
         // Query basierend auf der ausgewählten Tabelle erstellen
         const query = `SELECT *
-                       FROM ${selectedTable}
+                       FROM multiplechoicequestion
                        ORDER BY RANDOM() LIMIT 1`;
 
         client.query(query, (err, result) => {
