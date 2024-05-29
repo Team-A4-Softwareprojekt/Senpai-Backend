@@ -10,12 +10,24 @@ const handleSocketEvents = require('./socket');
 const PORT = process.env.PORT || 3000;
 const app = express();
 const server = http.createServer(app);
-const io = socketIO(server);
+const io = socketIO(server, {
+    cors: {
+        origin: [
+            'http://localhost:5173',
+            'https://senpai-development.onrender.com',
+            'https://senpai-website.onrender.com'
+        ],
+        methods: ["GET", "POST"],
+        allowedHeaders: ["my-custom-header"],
+        credentials: true
+    }
+});
 const cors = require('cors');
 
 const allowedOrigins = [
     'https://senpai-development.onrender.com',
-    'https://senpai-website.onrender.com'
+    'https://senpai-website.onrender.com',
+    'http://localhost:5173'
 ];
 
 

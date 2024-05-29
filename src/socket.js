@@ -10,6 +10,8 @@ function handleSocketEvents(io) {
         console.log("Socket-Id: " + socket.id);
 
         socket.on('Buzzer_Queue', () => {
+            console.log("START BUZZER QUEUE");
+
             let room = Object.keys(rooms).find(room => rooms[room].length === 1);
             if (!room) {
                 room = `room-${socket.id}`;
@@ -23,6 +25,30 @@ function handleSocketEvents(io) {
                 io.to(room).emit('Buzzer_GameFound', true);
             }
         });
+
+        socket.on('Leave_Buzzer_Queue', () => {
+            console.log("LEAVE BUZZER QUEUE");
+
+            // Find the room the socket is in
+            let room = Object.keys(rooms).find(room => rooms[room].includes(socket.id));
+
+            if (room) {
+                // Remove the socket from the room
+                rooms[room] = rooms[room].filter(id => id !== socket.id);
+
+                // If the room is now empty, delete it
+                if (rooms[room].length === 0) {
+                    delete rooms[room];
+                } else {
+                    // Notify the remaining user(s) in the room
+                    io.to(room).emit('Buzzer_GameFound', false);
+                }
+
+                socket.leave(room);
+                console.log(`Socket ${socket.id} left room ${room}`);
+            }
+        });
+
 
         socket.on('AWAIT_QUESTION', () => {
             const room = getRoom(socket);
@@ -130,3 +156,5 @@ function handleSocketEvents(io) {
 }
 
 module.exports = handleSocketEvents;
+
+// TODO: HIER MUSS SERVER ANTWORT KOMMEN
