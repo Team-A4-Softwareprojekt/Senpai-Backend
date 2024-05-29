@@ -1,4 +1,19 @@
 const socketIO = require('socket.io');
+const {Client} = require('pg');
+
+// Verbindungsinformationen
+const client = new Client({
+    user: 'lernplattformdb_user',
+    host: 'dpg-cotl9a7109ks73an4iug-a.frankfurt-postgres.render.com',
+    database: 'lernplattformdb',
+    password: 'z46dQYVIYnVeGf19tLgyWCg4g2Uo0u4n',
+    port: 5432, // Standardport für PostgreSQL,
+    ssl: true
+});
+
+client.connect(undefined)
+    .then(() => console.log('Socket verbunden mit der PostgreSQL-Datenbank'))
+    .catch(err => console.error('Verbindung fehlgeschlagen', err));
 
 function handleSocketEvents(io) {
     const rooms = {}; // Speichert die Räume und die Spieler darin
@@ -58,20 +73,9 @@ function handleSocketEvents(io) {
 
             if (roundCounter[room] <= 3) {
                 //Hier muss darauf geachtet werden, wie die Frage von der Datenbank zurückkommt
-                getQuestionFromDB((question) => {
+                getQuestionFromDB((question, table) => {
                     questions[room] = question;
-                    io.to(room).emit('SHOW_QUESTION', question);
-
-                    // Timer für die Frage
-                    let timeLeft = 10; // Beispiel: 10 Sekunden Timer
-                    const timer = setInterval(() => {
-                        timeLeft--;
-                        io.to(room).emit('TIMER', timeLeft);
-
-                        if (timeLeft <= 0) {
-                            clearInterval(timer);
-                        }
-                    }, 1000);
+                    io.to(room).emit('SHOW_QUESTION', question, table);
                 });
             } else {
                 io.to(room).emit('END_GAME');
@@ -123,10 +127,10 @@ function handleSocketEvents(io) {
                 if (otherPlayer) {
                     io.to(otherPlayer).emit('OPPONENT_DISCONNECTED');
                 }
-                    delete rooms[room];
-                    delete questions[room];
-                    delete answers[room];
-                    delete roundCounter[room];
+                delete rooms[room];
+                delete questions[room];
+                delete answers[room];
+                delete roundCounter[room];
             }
 
         });
@@ -138,23 +142,30 @@ function handleSocketEvents(io) {
     }
 
     function getQuestionFromDB(callback) {
-        // HIER MUSS DIE LOGIK FÜR DIE DATENBANKABFRAGE REIN, EIN BEISPIEL IST HIER ZU FINDEN:
-        //             const query = "SELECT id, questionText, correctAnswer FROM questions ORDER BY RAND() LIMIT 1";
-        //             db.query(query, (err, result) => {
-        //                 if (err) {
-        //                     console.error("Error fetching question: ", err);
-        //                     return;
-        //                 }
-        //                 if (result.length > 0) {
-        //                     callback(result[0]);
-        //                 } else {
-        //                     console.error("No question found in the database.");
-        //                 }
-        //             });
-        //
+        // Zufällig eine Tabelle auswählen
+        const tables = ['multiplechoicequestion', 'gaptextquestion'];
+        const selectedTable = tables[Math.floor(Math.random() * tables.length)];
+
+        console.log(selectedTable)
+
+        // Query basierend auf der ausgewählten Tabelle erstellen
+        const query = `SELECT *
+                       FROM ${selectedTable}
+                       ORDER BY RANDOM() LIMIT 1`;
+
+        client.query(query, (err, result) => {
+            if (err) {
+                console.error("Error fetching question: ", err);
+                return;
+            }
+            if (result.rows.length > 0) {
+                callback(result.rows[0], selectedTable);
+            } else {
+                console.error("No question found in the database.");
+            }
+        });
     }
+
 }
 
 module.exports = handleSocketEvents;
-
-// TODO: HIER MUSS SERVER ANTWORT KOMMEN

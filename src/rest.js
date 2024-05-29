@@ -13,7 +13,7 @@ const client = new Client({
 });
 
 client.connect(undefined)
-    .then(() => console.log('Verbunden mit der PostgreSQL-Datenbank'))
+    .then(() => console.log('Rest verbunden mit der PostgreSQL-Datenbank'))
     .catch(err => console.error('Verbindung fehlgeschlagen', err));
 
 
