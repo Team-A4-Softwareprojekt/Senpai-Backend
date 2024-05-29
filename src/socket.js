@@ -54,9 +54,6 @@ function handleSocketEvents(io) {
                 // If the room is now empty, delete it
                 if (rooms[room].length === 0) {
                     delete rooms[room];
-                } else {
-                    // Notify the remaining user(s) in the room
-                    io.to(room).emit('Buzzer_GameFound', false);
                 }
 
                 socket.leave(room);
@@ -75,7 +72,14 @@ function handleSocketEvents(io) {
                 //Hier muss darauf geachtet werden, wie die Frage von der Datenbank zurückkommt
                 getQuestionFromDB((question, table) => {
                     questions[room] = question;
-                    io.to(room).emit('SHOW_QUESTION', question, table);
+                    io.to(room).emit('BUZZER_QUESTION_TYPE', question, table);
+                    if (table === "multiplechoicequestion") {
+                        io.to(room).emit('SHOW_QUESTION_MULTIPLE_CHOICE', question);
+                    } else {
+                        io.to(room).emit('SHOW_QUESTION_GAP_TEXT', question);
+                    }
+
+
                 });
             } else {
                 io.to(room).emit('END_GAME');
