@@ -93,8 +93,9 @@ function handleSocketEvents(io) {
             } else {
                 console.log("ELSE ELSA")
                 const otherPlayer = rooms[room].find(id => id !== socket.id);
-                io.to(otherPlayer).emit("END_BUZZER_GAME", playerPoints[room][otherPlayer], playerPoints[room][socket] )
+                io.to(otherPlayer).emit("END_BUZZER_GAME", playerPoints[room][otherPlayer], playerPoints[room][socket])
                 socket.emit("END_BUZZER_GAME", playerPoints[room][socket], playerPoints[room][otherPlayer])
+
             }
 
         });
@@ -147,6 +148,19 @@ function handleSocketEvents(io) {
             }
         });
 
+        socket.on('CLOSE_LOBBY', () => {
+            const room = getRoom(socket);
+            if (![room]) return;
+
+            delete rooms[room];
+            delete questions[room];
+            delete answers[room];
+            delete roundCounter[room];
+            delete playerPoints[room];
+
+
+        });
+
         socket.on('disconnect', () => {
             const room = getRoom(socket);
             if (room) {
@@ -159,6 +173,7 @@ function handleSocketEvents(io) {
                 delete questions[room];
                 delete answers[room];
                 delete roundCounter[room];
+                delete playerPoints[room];
             }
 
         });
