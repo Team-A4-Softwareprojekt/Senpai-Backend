@@ -20,7 +20,7 @@ function handleSocketEvents(io) {
     const questions = {}; // Speichert die aktuellen Fragen pro Raum
     const answers = {}; // Speichert die Antworten der Spieler pro Raum
     const roundCounter = {}; // Zählt die Aufrufe von AWAIT_QUESTION pro Raum
-    const playerPoints = {} ; // Zählt die Punkte der Spieler eine Lobby
+    const playerPoints = {}; // Zählt die Punkte der Spieler eine Lobby
 
     io.on('connection', (socket) => {
         console.log("Socket-Id: " + socket.id);
@@ -39,7 +39,10 @@ function handleSocketEvents(io) {
             rooms[room].push(socket.id);
 
             if (rooms[room].length === 2) {
-                io.to(room).emit('Buzzer_GameFound', true);
+                const otherPlayer = rooms[room].find(id => id !== socket.id);
+                //TODO: otherName und ownName aus Datendank holen, dies muss der Client Lobby Connect machen.
+                io.to(otherPlayer).emit('Buzzer_GameFound', true, "otherName", "ownName");
+                socket.emit('Buzzer_GameFound', true, "ownName", "otherName")
             }
             playerPoints[room][socket.id] = 0;
         });
@@ -70,9 +73,9 @@ function handleSocketEvents(io) {
             const room = getRoom(socket);
             if (!room) return;
 
-            roundCounter[room] = (roundCounter[room] || 0) + 1;
-
-                if(!questions[room]){
+            if (roundCounter[room] < 3) {
+                if (!questions[room]) {
+                    roundCounter[room] = (roundCounter[room] || 0) + 1;
                     //Hier muss darauf geachtet werden, wie die Frage von der Datenbank zurückkommt
                     getQuestionFromDB((question, table) => {
                         questions[room] = question;
@@ -84,8 +87,12 @@ function handleSocketEvents(io) {
                         }
                     });
                 }
-                
-            
+            } else {
+                const otherPlayer = rooms[room].find(id => id !== socket.id);
+                io.to(otherPlayer).emit("END_BUZZER_GAME", playerPoints[room][otherPlayer], playerPoints[room][socket] )
+                socket.emit("END_BUZZER_GAME", playerPoints[room][socket], playerPoints[room][otherPlayer])
+            }
+
         });
 
         socket.on('PLAYER_BUZZERED', () => {
@@ -123,14 +130,16 @@ function handleSocketEvents(io) {
                 resetRoomQuestion(socket);
                 io.to(otherPlayer).emit('ENABLE_BUZZER');
                 io.to(room).emit('END_ROUND');  //TODO: end round hier raus nehmen, nur die correct answer belassen
+
             } else if (bothAnswered) {  //beide falsch?
                 resetRoomQuestion(socket);
                 io.to(otherPlayer).emit('ENABLE_BUZZER');
                 io.to(room).emit('END_ROUND');
+
             } else { //antwort falsch, gegenspieler darf
                 socket.emit('WRONG_ANSWER');
                 io.to(otherPlayer).emit('ENABLE_BUZZER');
-                socket.emit('DISABLE_BUZZER');
+                //socket.emit('DISABLE_BUZZER');
             }
         });
 
@@ -182,9 +191,10 @@ function handleSocketEvents(io) {
         });
     }
 
-    function resetRoomQuestion(socket){
+    function resetRoomQuestion(socket) {
         const room = getRoom(socket);
         questions[room] = null;
+        answers[room] = {};
     }
 
 }
