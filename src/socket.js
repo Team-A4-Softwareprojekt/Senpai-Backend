@@ -73,9 +73,12 @@ function handleSocketEvents(io) {
             const room = getRoom(socket);
             if (!room) return;
 
+            console.log(roundCounter[room])
+            roundCounter[room] = (roundCounter[room] || 0)
+
             if (roundCounter[room] < 3) {
                 if (!questions[room]) {
-                    roundCounter[room] = (roundCounter[room] || 0) + 1;
+                    roundCounter[room] += 1;
                     //Hier muss darauf geachtet werden, wie die Frage von der Datenbank zurückkommt
                     getQuestionFromDB((question, table) => {
                         questions[room] = question;
@@ -88,6 +91,7 @@ function handleSocketEvents(io) {
                     });
                 }
             } else {
+                console.log("ELSE ELSA")
                 const otherPlayer = rooms[room].find(id => id !== socket.id);
                 io.to(otherPlayer).emit("END_BUZZER_GAME", playerPoints[room][otherPlayer], playerPoints[room][socket] )
                 socket.emit("END_BUZZER_GAME", playerPoints[room][socket], playerPoints[room][otherPlayer])
