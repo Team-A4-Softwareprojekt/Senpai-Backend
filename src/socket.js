@@ -21,12 +21,18 @@ function handleSocketEvents(io) {
     const answers = {}; // Speichert die Antworten der Spieler pro Raum
     const roundCounter = {}; // Zählt die Aufrufe von AWAIT_QUESTION pro Raum
     const playerPoints = {}; // Zählt die Punkte der Spieler eine Lobby
+    const playerNames = {};
+    const buzzerTimerDuration = 23000; // 25s
+    let questionTimer = null;
+    let playerTurnTimer = null;
 
     io.on('connection', (socket) => {
         console.log("Socket-Id: " + socket.id);
 
-        socket.on('Buzzer_Queue', () => {
+        socket.on('Buzzer_Queue', (playerName) => {
             console.log("START BUZZER QUEUE");
+
+            playerNames[socket.id] = playerName;
 
             let room = Object.keys(rooms).find(room => rooms[room].length === 1);
             if (!room) {
@@ -103,16 +109,25 @@ function handleSocketEvents(io) {
 
         */
 
+
         socket.on('PLAYER_BUZZERED', () => {
             const room = getRoom(socket);
             if (!room) return;
 
+            // Starte den Timer für die Spielrunde
+            clearInterval(questionTimer);
+
             const otherPlayer = rooms[room].find(id => id !== socket.id);
             io.to(otherPlayer).emit('DISABLE_BUZZER');
-            //socket.emit('PICK_ANSWER');
+
+            // Starte den Timer für den Spielerzug
+            playerTurnTimer = startPlayerTurnTimer(socket);
         });
 
+
         socket.on('COMPARE_ANSWER', (answer) => {
+            clearInterval(playerTurnTimer);
+
             const room = getRoom(socket);
             if (!room) return;
 
@@ -145,20 +160,23 @@ function handleSocketEvents(io) {
                 playerPoints[room][socket.id] += 1;
                 playerPoints[room][otherPlayer] += 0;
 
-                resetRoomQuestion(socket);
+
                 io.to(otherPlayer).emit('ENABLE_BUZZER');
-                io.to(room).emit('END_ROUND');
+                io.to(room).emit('END_ROUND', playerNames[socket.id], correctAnswer);
+                resetRoomQuestion(socket);
 
             } else if (bothAnswered) {  //beide falsch?
-                resetRoomQuestion(socket);
+
                 io.to(otherPlayer).emit('ENABLE_BUZZER');
-                io.to(room).emit('END_ROUND');
+                io.to(room).emit('END_ROUND', "unentschieden", correctAnswer);
+                resetRoomQuestion(socket);
 
             } else { //antwort falsch, gegenspieler darf
                 socket.emit('WRONG_ANSWER');
                 io.to(otherPlayer).emit('ENABLE_BUZZER');
+                playerTurnTimer = startPlayerTurnTimer(otherPlayer);
                 //socket.emit('DISABLE_BUZZER');
-            }
+                }
         });
 
         socket.on('CLOSE_LOBBY', () => {
@@ -243,10 +261,12 @@ function handleSocketEvents(io) {
             }
         });
 
+        // Starte den Timer
+        questionTimer = startTimerBuzzer(socket);
+
     }
 
 
-    //TODO: TIMER SOLL BESTIMMEN WANN EINE NEUE FRAGE GENERIERT WIRD, wo soll der Timer hin?
     function resetRoomQuestion(socket) {
         const room = getRoom(socket);
 
@@ -261,6 +281,77 @@ function handleSocketEvents(io) {
             socket.emit("END_BUZZER_GAME", playerPoints[room][socket], playerPoints[room][otherPlayer])
         }
     }
+
+    // Funktion, um den Timer zu starten
+    function startTimerBuzzer(socket) {
+        const room = getRoom(socket);
+        const otherPlayer = rooms[room].find(id => id !== socket.id);
+
+        let remainingSeconds = buzzerTimerDuration / 1000; // Gesamte Anzahl von Sekunden
+
+        const timer = setInterval(() => {
+            remainingSeconds--; // Reduziere die verbleibenden Sekunden um 1
+
+            // Sende die verbleibenden Sekunden an den Client
+            io.to(room).emit('BUZZER_TIMER_TICK', remainingSeconds);
+
+            if (remainingSeconds <= 0) {
+                clearInterval(timer); // Stoppe den Timer, wenn die Zeit abgelaufen ist
+                io.to(otherPlayer).emit('ENABLE_BUZZER');
+                io.to(room).emit('END_ROUND', 'unentschieden');
+                resetRoomQuestion(socket);
+            }
+        }, 1000); // Wiederhole alle 1000ms (1 Sekunde)
+
+        return timer; // Gib den Timer zurück, um darauf zugreifen zu können
+    }
+
+    // Funktion, um den Timer für den Spielerzug zu starten
+
+    function startPlayerTurnTimer(socket) {
+        const room = getRoom(socket);
+
+        answers[room] = answers[room] || {};
+
+        let remainingSeconds = 5; // Anzahl von Sekunden für den Spielerzug
+
+        const timer = setInterval(() => {
+            remainingSeconds--; // Reduziere die verbleibenden Sekunden um 1
+
+            // Sende die verbleibenden Sekunden an den Client
+            io.to(room).emit('PLAYER_TURN_TIMER_TICK', remainingSeconds);
+
+            if (remainingSeconds <= 0) {
+                clearInterval(timer); // Stoppe den Timer, wenn die Zeit abgelaufen ist
+
+                answers[room][socket.id] = 'empty';
+                const otherPlayer = rooms[room].find(id => id !== socket.id);
+                const correctAnswer = questions[room].solution;
+                const bothAnswered = answers[room][socket.id] && answers[room][otherPlayer];
+
+
+                // Hier die angepasste Logik bei Ablauf des Timers
+                if (bothAnswered) {
+                    // beide haben falsch geantwortet
+                    io.to(otherPlayer).emit('ENABLE_BUZZER');
+                    io.to(room).emit('END_ROUND', "unentschieden", correctAnswer);
+                    resetRoomQuestion(socket);
+                } else {
+                    // aktueller Spieler hat falsch geantwortet, der andere Spieler darf
+                    socket.emit('WRONG_ANSWER');
+                    io.to(otherPlayer).emit('ENABLE_BUZZER');
+                    //TODO: Buzzer-Drücken vom otherPlayer simulieren
+                    io.to(otherPlayer).emit('TRIGGER_BUZZER');
+
+                }
+            }
+        }, 1000); // Wiederhole alle 1000ms (1 Sekunde)
+
+        return timer; // Gib den Timer zurück, um darauf zugreifen zu können
+    }
+
+
+
 
 }
 

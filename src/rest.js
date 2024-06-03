@@ -73,7 +73,7 @@ router.get("/login", (request, response) => {
                 response.send(false);
             }
             else {
-                response.send(true);
+                response.send({ success: true, username: username });
             }
         }
     });
