@@ -6,6 +6,7 @@ const http = require('http');
 const socketIO = require('socket.io');
 const rest = require('./rest');
 const handleSocketEvents = require('./socket');
+const bodyParser = require('body-parser');
 
 const PORT = process.env.PORT || 3000;
 const app = express();
@@ -46,6 +47,7 @@ app.use(cors({
 }));
 
 
+app.use(bodyParser.json());
 // Verwende die Express-Routen
 app.use('/', rest);
 
