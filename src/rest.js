@@ -79,5 +79,15 @@ router.get("/login", (request, response) => {
     });
 });
 
+router.get("/connection_test", (request, response) => {
+    const testdata = request.query.data;
+    console.log(testdata);
+    if(testdata === "TEST"){
+        response.send(true);
+    }else{
+        response.send(false);
+    }
+
+})
 
 module.exports = router;

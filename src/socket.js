@@ -210,6 +210,15 @@ function handleSocketEvents(io) {
 
         });
 
+        /**
+         * This is the listener for the automated test
+         * */
+        socket.on('CONNECTION_TEST', () => {
+            console.log("connection test received")
+            socket.emit('CONNECTION_TEST_SUCCESSFULLY', true);
+
+        });
+
     });
 
     function getRoom(socket) {
