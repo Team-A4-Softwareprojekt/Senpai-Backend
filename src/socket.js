@@ -31,6 +31,24 @@ function handleSocketEvents(io) {
     io.on('connection', (socket) => {
         console.log("Socket-Id: " + socket.id);
 
+        socket.on('login', async ({ username, password }) => {
+            try {
+                const query = 'SELECT * FROM player WHERE playername = $1 AND playerpassword = $2';
+                const values = [username, password];
+                const res = await client.query(query, values);
+
+                if (res.rows.length > 0) {
+                    const user = res.rows[0];
+                    socket.emit('login_success', user);
+                } else {
+                    socket.emit('login_failure', { message: 'Invalid username or password' });
+                }
+            } catch (err) {
+                console.error('Error querying database', err);
+                socket.emit('login_failure', { message: 'Database error' });
+            }
+        });
+
         socket.on('Buzzer_Queue', (playerName) => {
             console.log("START BUZZER QUEUE");
 
@@ -369,7 +387,7 @@ function handleSocketEvents(io) {
 
     function startGameCountdownBuzzer(socket) {
         const room = getRoom(socket);
-        let remainingSeconds = 4; // Anzahl von Sekunden für den Spielerzug
+        let remainingSeconds = 4;
 
         const timer = setInterval(() => {
             remainingSeconds--;
