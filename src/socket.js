@@ -91,6 +91,9 @@ function handleSocketEvents(io) {
             const otherPlayer = rooms[room].find(id => id !== socket.id);
             io.to(otherPlayer).emit('DISABLE_BUZZER');
 
+            // Informiere den Gegner, dass der Buzzer zuerst gedrückt wurde
+            io.to(otherPlayer).emit('OPPONENT_BUZZERED');
+
             // Starte den Timer für den Spielerzug
             playerTurnTimer = startPlayerTurnTimer(socket);
         });
@@ -129,11 +132,9 @@ function handleSocketEvents(io) {
                 console.log("correct answer")
                 // Add points logic here
                 playerPoints[room][socket.id] += 1;
-                playerPoints[room][otherPlayer] += 0;
 
                 console.log(playerPoints[room][socket.id])
                 console.log(playerPoints[room][otherPlayer])
-
 
                 io.to(otherPlayer).emit('ENABLE_BUZZER');
 
@@ -152,9 +153,19 @@ function handleSocketEvents(io) {
             } else { //antwort falsch, gegenspieler darf
                 socket.emit('WRONG_ANSWER');
                 io.to(otherPlayer).emit('ENABLE_BUZZER');
+                io.to(otherPlayer).emit('OPPONENT_WRONG_ANSWER');
                 playerTurnTimer = startPlayerTurnTimer(otherPlayer);
                 //socket.emit('DISABLE_BUZZER');
             }
+        });
+
+        socket.on('WRONG_ANSWER_PENALTY', () => {
+            const room = getRoom(socket);
+            if (!room) return;
+        
+            playerPoints[room][socket.id] -= 1;
+            const otherPlayer = rooms[room].find(id => id !== socket.id);
+            io.to(otherPlayer).emit('OPPONENT_WRONG_ANSWER');
         });
 
         socket.on('CLOSE_LOBBY', () => {
@@ -344,8 +355,11 @@ function handleSocketEvents(io) {
                     socket.emit('WRONG_ANSWER');
                     io.to(otherPlayer).emit('ENABLE_BUZZER');
                     //TODO: Buzzer-Drücken vom otherPlayer simulieren
-                    io.to(otherPlayer).emit('TRIGGER_BUZZER');
 
+                    // Only emit 'TRIGGER_BUZZER' if the other player hasn't already buzzed in
+                    if (!answers[room][otherPlayer]) {
+                        io.to(otherPlayer).emit('TRIGGER_BUZZER');
+                    }
                 }
             }
         }, 1000); // Wiederhole alle 1000ms (1 Sekunde)
@@ -355,7 +369,7 @@ function handleSocketEvents(io) {
 
     function startGameCountdownBuzzer(socket) {
         const room = getRoom(socket);
-        let remainingSeconds = 5; // Anzahl von Sekunden für den Spielerzug
+        let remainingSeconds = 4; // Anzahl von Sekunden für den Spielerzug
 
         const timer = setInterval(() => {
             remainingSeconds--;
