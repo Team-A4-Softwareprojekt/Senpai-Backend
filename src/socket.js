@@ -23,7 +23,7 @@ function handleSocketEvents(io) {
     const playerPoints = {}; // Zählt die Punkte der Spieler eine Lobby
     const playerNames = {};
     const playerReady = {};
-    const buzzerTimerDuration = 23000; // 25s
+    const buzzerTimerDuration = 23000; // 23s
     let questionTimer = null;
     let playerTurnTimer = null;
     let tableGLOBAL = null;
@@ -85,7 +85,8 @@ function handleSocketEvents(io) {
             const room = getRoom(socket);
             if (!room) return;
 
-            // Starte den Timer für die Spielrunde
+            // Stoppe den Timer für die Spielrunde
+            clearInterval(playerTurnTimer);
             clearInterval(questionTimer);
 
             const otherPlayer = rooms[room].find(id => id !== socket.id);
@@ -111,19 +112,10 @@ function handleSocketEvents(io) {
             answers[room][socket.id] = answer;
 
             const otherPlayer = rooms[room].find(id => id !== socket.id);
+            const otherPlayerSocket = io.sockets.sockets.get(otherPlayer);
             const bothAnswered = answers[room][socket.id] && answers[room][otherPlayer];
 
-            // Spieler "buzzered" falsch -> Spieler "other" keine antwort -> Spieler "other" bekommt x Punkt
-            // Spieler "buzzered" falsch -> Spieler "other" richtig -> Spieler "other" bekommt x Punkte
-            // Spieler "buzzered" falsch -> Spieler "other" falsch -> Spieler "other" bekommt x Punkt
-            // Spieler "buzzered" richtig -> Spieler "buzzered" bekommt x Punkte
             if (answer === correctAnswer) { //antwort richtig
-
-                //TODO: NEUE EMITS um beim Gegenspieler auch den richtigen Popup anzeigen lassen zu können
-                //TODO: socket.emit('ENEMY_CORRECT_ANSWER")
-                // Diese Runde geht an "Spielername"
-                // Die richtige Antwort wäre gewesen: D
-                // (bspw. mit einem roten Rand))
 
                 //TODO: ENABLE_BUZZER scheint in den ersten zwei Bedingungen (if und if-else) überflüssig zu sein
                 // bitte testen
@@ -145,27 +137,23 @@ function handleSocketEvents(io) {
             } else if (bothAnswered) {  //beide falsch?
 
                 io.to(otherPlayer).emit('ENABLE_BUZZER');
+                playerPoints[room][socket.id] -= 1;
 
                 socket.emit('END_ROUND', "unentschieden", correctAnswer, playerPoints[room][socket.id], playerPoints[room][otherPlayer]);
                 io.to(otherPlayer).emit('END_ROUND', "unentschieden", correctAnswer, playerPoints[room][otherPlayer], playerPoints[room][socket.id])
                 resetRoomQuestion(socket);
 
+                console.log("BEIDE GEANTWORTET - DEBUGGING")
+
             } else { //antwort falsch, gegenspieler darf
+                playerPoints[room][socket.id] -= 1;
                 socket.emit('WRONG_ANSWER');
                 io.to(otherPlayer).emit('ENABLE_BUZZER');
                 io.to(otherPlayer).emit('OPPONENT_WRONG_ANSWER');
-                playerTurnTimer = startPlayerTurnTimer(otherPlayer);
+                playerTurnTimer = startPlayerTurnTimer(otherPlayerSocket);
+                console.log("FALSCHE ANTWORT -  DEBUGGING")
                 //socket.emit('DISABLE_BUZZER');
             }
-        });
-
-        socket.on('WRONG_ANSWER_PENALTY', () => {
-            const room = getRoom(socket);
-            if (!room) return;
-        
-            playerPoints[room][socket.id] -= 1;
-            const otherPlayer = rooms[room].find(id => id !== socket.id);
-            io.to(otherPlayer).emit('OPPONENT_WRONG_ANSWER');
         });
 
         socket.on('CLOSE_LOBBY', () => {
@@ -352,14 +340,11 @@ function handleSocketEvents(io) {
                     resetRoomQuestion(socket);
                 } else {
                     // aktueller Spieler hat falsch geantwortet, der andere Spieler darf
+                    playerPoints[room][socket.id] -= 1;
                     socket.emit('WRONG_ANSWER');
                     io.to(otherPlayer).emit('ENABLE_BUZZER');
-                    //TODO: Buzzer-Drücken vom otherPlayer simulieren
+                    io.to(otherPlayer).emit('OPPONENT_WRONG_ANSWER');
 
-                    // Only emit 'TRIGGER_BUZZER' if the other player hasn't already buzzed in
-                    if (!answers[room][otherPlayer]) {
-                        io.to(otherPlayer).emit('TRIGGER_BUZZER');
-                    }
                 }
             }
         }, 1000); // Wiederhole alle 1000ms (1 Sekunde)
@@ -369,7 +354,7 @@ function handleSocketEvents(io) {
 
     function startGameCountdownBuzzer(socket) {
         const room = getRoom(socket);
-        let remainingSeconds = 4; // Anzahl von Sekunden für den Spielerzug
+        let remainingSeconds = 4;
 
         const timer = setInterval(() => {
             remainingSeconds--;
