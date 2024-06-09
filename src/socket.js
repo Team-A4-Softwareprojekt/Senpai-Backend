@@ -31,24 +31,6 @@ function handleSocketEvents(io) {
     io.on('connection', (socket) => {
         console.log("Socket-Id: " + socket.id);
 
-        socket.on('login', async ({ username, password }) => {
-            try {
-                const query = 'SELECT * FROM player WHERE playername = $1 AND playerpassword = $2';
-                const values = [username, password];
-                const res = await client.query(query, values);
-
-                if (res.rows.length > 0) {
-                    const user = res.rows[0];
-                    socket.emit('login_success', user);
-                } else {
-                    socket.emit('login_failure', { message: 'Invalid username or password' });
-                }
-            } catch (err) {
-                console.error('Error querying database', err);
-                socket.emit('login_failure', { message: 'Database error' });
-            }
-        });
-
         socket.on('Buzzer_Queue', (playerName) => {
             console.log("START BUZZER QUEUE");
 
@@ -133,21 +115,11 @@ function handleSocketEvents(io) {
             const otherPlayerSocket = io.sockets.sockets.get(otherPlayer);
             const bothAnswered = answers[room][socket.id] && answers[room][otherPlayer];
 
-            // Spieler "buzzered" falsch -> Spieler "other" keine antwort -> Spieler "other" bekommt x Punkt
-            // Spieler "buzzered" falsch -> Spieler "other" richtig -> Spieler "other" bekommt x Punkte
-            // Spieler "buzzered" falsch -> Spieler "other" falsch -> Spieler "other" bekommt x Punkt
-            // Spieler "buzzered" richtig -> Spieler "buzzered" bekommt x Punkte
             if (answer === correctAnswer) { //antwort richtig
-
-                //TODO: NEUE EMITS um beim Gegenspieler auch den richtigen Popup anzeigen lassen zu können
-                //TODO: socket.emit('ENEMY_CORRECT_ANSWER")
-                // Diese Runde geht an "Spielername"
-                // Die richtige Antwort wäre gewesen: D
-                // (bspw. mit einem roten Rand))
 
                 //TODO: ENABLE_BUZZER scheint in den ersten zwei Bedingungen (if und if-else) überflüssig zu sein
                 // bitte testen
-                
+
                 socket.emit('CORRECT_ANSWER');
                 console.log("correct answer")
                 // Add points logic here
@@ -170,7 +142,7 @@ function handleSocketEvents(io) {
                 socket.emit('END_ROUND', "unentschieden", correctAnswer, playerPoints[room][socket.id], playerPoints[room][otherPlayer]);
                 io.to(otherPlayer).emit('END_ROUND', "unentschieden", correctAnswer, playerPoints[room][otherPlayer], playerPoints[room][socket.id])
                 resetRoomQuestion(socket);
-                
+
                 console.log("BEIDE GEANTWORTET - DEBUGGING")
 
             } else { //antwort falsch, gegenspieler darf
@@ -183,17 +155,6 @@ function handleSocketEvents(io) {
                 //socket.emit('DISABLE_BUZZER');
             }
         });
-
-        /*
-        socket.on('WRONG_ANSWER_PENALTY', () => {
-            const room = getRoom(socket);
-            if (!room) return;
-        
-            playerPoints[room][socket.id] -= 1;
-            const otherPlayer = rooms[room].find(id => id !== socket.id);
-            io.to(otherPlayer).emit('OPPONENT_WRONG_ANSWER');
-        });
-        */
 
         socket.on('CLOSE_LOBBY', () => {
             const room = getRoom(socket);
@@ -383,13 +344,7 @@ function handleSocketEvents(io) {
                     socket.emit('WRONG_ANSWER');
                     io.to(otherPlayer).emit('ENABLE_BUZZER');
                     io.to(otherPlayer).emit('OPPONENT_WRONG_ANSWER');
-                    //TODO: Buzzer-Drücken vom otherPlayer simulieren
 
-                    /*
-                    // Only emit 'TRIGGER_BUZZER' if the other player hasn't already buzzed in
-                    if (!answers[room][otherPlayer]) {
-                        io.to(otherPlayer).emit('TRIGGER_BUZZER');
-                    }*/
                 }
             }
         }, 1000); // Wiederhole alle 1000ms (1 Sekunde)
