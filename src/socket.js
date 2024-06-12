@@ -81,6 +81,19 @@ function handleSocketEvents(io) {
             }
         });
 
+
+        socket.on('REQUEST_DAILY_CHALLENGE_QUESTION', () => {
+            getQuestionFromDB((question, table) => {
+                io.to(socket.id).emit('BUZZER_QUESTION_TYPE', table);
+                if(table === "gaptextquestion") {
+                    io.to(socket.id).emit('RECEIVE_QUESTION_GAP_TEXT', question);
+                } else {
+                    io.to(socket.id).emit('RECEIVE_QUESTION_MULTIPLE_CHOICE', question);
+                }
+            });
+        });
+
+        
         socket.on('PLAYER_BUZZERED', () => {
             const room = getRoom(socket);
             if (!room) return;
@@ -213,13 +226,13 @@ function handleSocketEvents(io) {
         // Zufällig eine Tabelle auswählen
         const tables = ['multiplechoicequestion', 'gaptextquestion'];
         //const selectedTable = tables[Math.floor(Math.random() * tables.length)];
-        const selectedTable = 'multiplechoicequestion';
+        const selectedTable = 'gaptextquestion';
 
         console.log(selectedTable)
 
         // Query basierend auf der ausgewählten Tabelle erstellen
         const query = `SELECT *
-                       FROM multiplechoicequestion
+                       FROM gaptextquestion
                        ORDER BY RANDOM() LIMIT 1`;
 
         client.query(query, (err, result) => {
