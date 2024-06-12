@@ -6,6 +6,7 @@ const http = require('http');
 const socketIO = require('socket.io');
 const rest = require('./rest');
 const handleSocketEvents = require('./socket');
+const bodyParser = require('body-parser');
 
 const PORT = process.env.PORT || 3000;
 const app = express();
@@ -24,6 +25,7 @@ const io = socketIO(server, {
     }
 });
 const cors = require('cors');
+
 
 const allowedOrigins = [
     'https://senpai-development.onrender.com',
@@ -45,7 +47,7 @@ app.use(cors({
     }
 }));
 
-
+app.use(bodyParser.json());
 // Verwende die Express-Routen
 app.use('/', rest);
 
