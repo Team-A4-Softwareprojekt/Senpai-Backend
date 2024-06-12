@@ -47,6 +47,7 @@ app.use(cors({
     }
 }));
 
+
 app.use(bodyParser.json());
 // Verwende die Express-Routen
 app.use('/', rest);
