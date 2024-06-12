@@ -22,9 +22,11 @@ function handleSocketEvents(io) {
     const roundCounter = {}; // Zählt die Aufrufe von AWAIT_QUESTION pro Raum
     const playerPoints = {}; // Zählt die Punkte der Spieler eine Lobby
     const playerNames = {};
-    const buzzerTimerDuration = 23000; // 25s
+    const playerReady = {};
+    const buzzerTimerDuration = 23000; // 23s
     let questionTimer = null;
     let playerTurnTimer = null;
+    let tableGLOBAL = null;
 
     io.on('connection', (socket) => {
         console.log("Socket-Id: " + socket.id);
@@ -39,6 +41,7 @@ function handleSocketEvents(io) {
                 room = `room-${socket.id}`;
                 rooms[room] = [];
                 playerPoints[room] = {};
+                playerReady[room] = {};
             }
 
             socket.join(room);
@@ -46,10 +49,13 @@ function handleSocketEvents(io) {
 
             if (rooms[room].length === 2) {
                 const otherPlayer = rooms[room].find(id => id !== socket.id);
-                //TODO: otherName und ownName aus Datendank holen, dies muss der Client Lobby Connect machen.
-                io.to(otherPlayer).emit('Buzzer_GameFound', true, "otherName", "ownName");
-                socket.emit('Buzzer_GameFound', true, "ownName", "otherName");
-                sendQuestionToClient(socket);
+
+                io.to(otherPlayer).emit('Buzzer_GameFound', true);
+                socket.emit('Buzzer_GameFound', true);
+
+                startGameCountdownBuzzer(socket);
+                sendQuestionToClient(socket)
+
             }
             playerPoints[room][socket.id] = 0;
         });
@@ -75,50 +81,19 @@ function handleSocketEvents(io) {
             }
         });
 
-        /*
-        socket.on('AWAIT_QUESTION', () => {
-            const room = getRoom(socket);
-            if (!room) return;
-
-            console.log(roundCounter[room])
-            roundCounter[room] = (roundCounter[room] || 0)
-
-            if (roundCounter[room] < 3) {
-                if (!questions[room]) {
-                    roundCounter[room] += 1;
-                    //Hier muss darauf geachtet werden, wie die Frage von der Datenbank zurückkommt
-                    getQuestionFromDB((question, table) => {
-                        questions[room] = question;
-                        io.to(room).emit('BUZZER_QUESTION_TYPE', table);
-                        if (table === "multiplechoicequestion") {
-                            io.to(room).emit('SHOW_QUESTION_MULTIPLE_CHOICE', question);
-                        } else {
-                            io.to(room).emit('SHOW_QUESTION_GAP_TEXT', question);
-                        }
-                    });
-                }
-            } else {
-                console.log("ELSE ELSA")
-                const otherPlayer = rooms[room].find(id => id !== socket.id);
-                io.to(otherPlayer).emit("END_BUZZER_GAME", playerPoints[room][otherPlayer], playerPoints[room][socket])
-                socket.emit("END_BUZZER_GAME", playerPoints[room][socket], playerPoints[room][otherPlayer])
-
-            }
-
-        });
-
-        */
-
-
         socket.on('PLAYER_BUZZERED', () => {
             const room = getRoom(socket);
             if (!room) return;
 
-            // Starte den Timer für die Spielrunde
+            // Stoppe den Timer für die Spielrunde
+            clearInterval(playerTurnTimer);
             clearInterval(questionTimer);
 
             const otherPlayer = rooms[room].find(id => id !== socket.id);
             io.to(otherPlayer).emit('DISABLE_BUZZER');
+
+            // Informiere den Gegner, dass der Buzzer zuerst gedrückt wurde
+            io.to(otherPlayer).emit('OPPONENT_BUZZERED');
 
             // Starte den Timer für den Spielerzug
             playerTurnTimer = startPlayerTurnTimer(socket);
@@ -137,19 +112,10 @@ function handleSocketEvents(io) {
             answers[room][socket.id] = answer;
 
             const otherPlayer = rooms[room].find(id => id !== socket.id);
+            const otherPlayerSocket = io.sockets.sockets.get(otherPlayer);
             const bothAnswered = answers[room][socket.id] && answers[room][otherPlayer];
 
-            // Spieler "buzzered" falsch -> Spieler "other" keine antwort -> Spieler "other" bekommt x Punkt
-            // Spieler "buzzered" falsch -> Spieler "other" richtig -> Spieler "other" bekommt x Punkte
-            // Spieler "buzzered" falsch -> Spieler "other" falsch -> Spieler "other" bekommt x Punkt
-            // Spieler "buzzered" richtig -> Spieler "buzzered" bekommt x Punkte
             if (answer === correctAnswer) { //antwort richtig
-
-                //TODO: NEUE EMITS um beim Gegenspieler auch den richtigen Popup anzeigen lassen zu können
-                //TODO: socket.emit('ENEMY_CORRECT_ANSWER")
-                // Diese Runde geht an "Spielername"
-                // Die richtige Antwort wäre gewesen: D
-                // (bspw. mit einem roten Rand))
 
                 //TODO: ENABLE_BUZZER scheint in den ersten zwei Bedingungen (if und if-else) überflüssig zu sein
                 // bitte testen
@@ -158,25 +124,36 @@ function handleSocketEvents(io) {
                 console.log("correct answer")
                 // Add points logic here
                 playerPoints[room][socket.id] += 1;
-                playerPoints[room][otherPlayer] += 0;
 
+                console.log(playerPoints[room][socket.id])
+                console.log(playerPoints[room][otherPlayer])
 
                 io.to(otherPlayer).emit('ENABLE_BUZZER');
-                io.to(room).emit('END_ROUND', playerNames[socket.id], correctAnswer);
+
+                socket.emit('END_ROUND', playerNames[socket.id], correctAnswer, playerPoints[room][socket.id], playerPoints[room][otherPlayer]);
+                io.to(otherPlayer).emit('END_ROUND', playerNames[socket.id], correctAnswer, playerPoints[room][otherPlayer], playerPoints[room][socket.id]);
                 resetRoomQuestion(socket);
 
             } else if (bothAnswered) {  //beide falsch?
 
                 io.to(otherPlayer).emit('ENABLE_BUZZER');
-                io.to(room).emit('END_ROUND', "unentschieden", correctAnswer);
+                playerPoints[room][socket.id] -= 1;
+
+                socket.emit('END_ROUND', "unentschieden", correctAnswer, playerPoints[room][socket.id], playerPoints[room][otherPlayer]);
+                io.to(otherPlayer).emit('END_ROUND', "unentschieden", correctAnswer, playerPoints[room][otherPlayer], playerPoints[room][socket.id])
                 resetRoomQuestion(socket);
 
+                console.log("BEIDE GEANTWORTET - DEBUGGING")
+
             } else { //antwort falsch, gegenspieler darf
+                playerPoints[room][socket.id] -= 1;
                 socket.emit('WRONG_ANSWER');
                 io.to(otherPlayer).emit('ENABLE_BUZZER');
-                playerTurnTimer = startPlayerTurnTimer(otherPlayer);
+                io.to(otherPlayer).emit('OPPONENT_WRONG_ANSWER');
+                playerTurnTimer = startPlayerTurnTimer(otherPlayerSocket);
+                console.log("FALSCHE ANTWORT -  DEBUGGING")
                 //socket.emit('DISABLE_BUZZER');
-                }
+            }
         });
 
         socket.on('CLOSE_LOBBY', () => {
@@ -188,6 +165,8 @@ function handleSocketEvents(io) {
             delete answers[room];
             delete roundCounter[room];
             delete playerPoints[room];
+            delete playerNames[room];
+            delete playerReady[room];
 
 
         });
@@ -206,7 +185,21 @@ function handleSocketEvents(io) {
                 delete answers[room];
                 delete roundCounter[room];
                 delete playerPoints[room];
+                delete playerNames[room];
+                delete playerReady[room];
+
+                socket.leave(room);
             }
+
+        });
+
+
+        /**
+         * This is the listener for the automated test
+         * */
+        socket.on('CONNECTION_TEST', () => {
+            console.log("connection test received")
+            socket.emit('CONNECTION_TEST_SUCCESSFULLY', true);
 
         });
 
@@ -243,7 +236,6 @@ function handleSocketEvents(io) {
     }
 
     function sendQuestionToClient(socket) {
-
         const room = getRoom(socket);
         if (!room) return;
 
@@ -252,17 +244,22 @@ function handleSocketEvents(io) {
 
         getQuestionFromDB((question, table) => {
             questions[room] = question;
-            io.to(room).emit('BUZZER_QUESTION_TYPE', table);
+
+            tableGLOBAL = table;
+
             if (table === "multiplechoicequestion") {
-                io.to(room).emit('SHOW_QUESTION_MULTIPLE_CHOICE', question);
+                //io.to(room).emit('SHOW_QUESTION_MULTIPLE_CHOICE', question);
+                io.to(room).emit('SET_BUZZER_QUESTION', question);
                 console.log(rooms[room])
             } else {
-                io.to(room).emit('SHOW_QUESTION_GAP_TEXT', question);
+                //io.to(room).emit('SHOW_QUESTION_GAP_TEXT', question);
+                io.to(room).emit('SET_BUZZER_QUESTION', question);
             }
         });
 
-        // Starte den Timer
-        questionTimer = startTimerBuzzer(socket);
+        if(roundCounter[room] > 1){
+            questionTimer = startTimerBuzzer(socket);
+        }
 
     }
 
@@ -277,8 +274,8 @@ function handleSocketEvents(io) {
         if (roundCounter[room] < 3) {
             sendQuestionToClient(socket);
         } else {
-            io.to(otherPlayer).emit("END_BUZZER_GAME", playerPoints[room][otherPlayer], playerPoints[room][socket])
-            socket.emit("END_BUZZER_GAME", playerPoints[room][socket], playerPoints[room][otherPlayer])
+            io.to(otherPlayer).emit("END_BUZZER_GAME", playerPoints[room][otherPlayer], playerPoints[room][socket.id])
+            socket.emit("END_BUZZER_GAME", playerPoints[room][socket.id], playerPoints[room][otherPlayer])
         }
     }
 
@@ -296,9 +293,14 @@ function handleSocketEvents(io) {
             io.to(room).emit('BUZZER_TIMER_TICK', remainingSeconds);
 
             if (remainingSeconds <= 0) {
+                const correctAnswer = questions[room].solution;
+
                 clearInterval(timer); // Stoppe den Timer, wenn die Zeit abgelaufen ist
                 io.to(otherPlayer).emit('ENABLE_BUZZER');
-                io.to(room).emit('END_ROUND', 'unentschieden');
+
+                socket.emit('END_ROUND', "unentschieden", correctAnswer, playerPoints[room][socket.id], playerPoints[room][otherPlayer]);
+                io.to(otherPlayer).emit('END_ROUND', "unentschieden", correctAnswer, playerPoints[room][otherPlayer], playerPoints[room][socket.id])
+
                 resetRoomQuestion(socket);
             }
         }, 1000); // Wiederhole alle 1000ms (1 Sekunde)
@@ -329,19 +331,19 @@ function handleSocketEvents(io) {
                 const correctAnswer = questions[room].solution;
                 const bothAnswered = answers[room][socket.id] && answers[room][otherPlayer];
 
-
                 // Hier die angepasste Logik bei Ablauf des Timers
                 if (bothAnswered) {
                     // beide haben falsch geantwortet
                     io.to(otherPlayer).emit('ENABLE_BUZZER');
-                    io.to(room).emit('END_ROUND', "unentschieden", correctAnswer);
+                    socket.emit('END_ROUND', "unentschieden", correctAnswer, playerPoints[room][socket.id], playerPoints[room][otherPlayer]);
+                    io.to(otherPlayer).emit('END_ROUND', "unentschieden", correctAnswer, playerPoints[room][otherPlayer], playerPoints[room][socket.id]);
                     resetRoomQuestion(socket);
                 } else {
                     // aktueller Spieler hat falsch geantwortet, der andere Spieler darf
+                    playerPoints[room][socket.id] -= 1;
                     socket.emit('WRONG_ANSWER');
                     io.to(otherPlayer).emit('ENABLE_BUZZER');
-                    //TODO: Buzzer-Drücken vom otherPlayer simulieren
-                    io.to(otherPlayer).emit('TRIGGER_BUZZER');
+                    io.to(otherPlayer).emit('OPPONENT_WRONG_ANSWER');
 
                 }
             }
@@ -350,7 +352,26 @@ function handleSocketEvents(io) {
         return timer; // Gib den Timer zurück, um darauf zugreifen zu können
     }
 
+    function startGameCountdownBuzzer(socket) {
+        const room = getRoom(socket);
+        let remainingSeconds = 4;
 
+        const timer = setInterval(() => {
+            remainingSeconds--;
+
+            if (remainingSeconds <= 0) {
+                clearInterval(timer);
+
+                // Starte den Timer
+
+                io.to(room).emit('BUZZER_QUESTION_TYPE', tableGLOBAL);
+                questionTimer = startTimerBuzzer(socket);
+            }
+
+            io.to(room).emit('BUZZER_COUNTDOWN', remainingSeconds);
+
+        }, 1000);
+    }
 
 
 }

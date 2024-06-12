@@ -26,6 +26,7 @@ const io = socketIO(server, {
 });
 const cors = require('cors');
 
+
 const allowedOrigins = [
     'https://senpai-development.onrender.com',
     'https://senpai-website.onrender.com',

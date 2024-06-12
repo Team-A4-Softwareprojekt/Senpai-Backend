@@ -107,6 +107,7 @@ router.post('/login', (req, res) => {
     });
 });
 
+
 router.get('/security-questions', (req, res) => {
     client.query('SELECT unnest(enum_range(null::securityquestion));', (err, dbRes) => {
         if (err) {
@@ -120,6 +121,37 @@ router.get('/security-questions', (req, res) => {
     });
 });
 
+
+
+router.get("/connection_test", (request, response) => {
+    const testdata = request.query.data;
+    console.log(testdata);
+    if(testdata === "TEST"){
+        response.send(true);
+    }else{
+        response.send(false);
+    }
+
+})
+
+router.post('/loadAccountData', (request, response) => {
+    const { playerName } = request.body; // Hier sollte request.body verwendet werden
+    console.log(request.body);
+
+    client.query('SELECT * FROM player WHERE playername = $1', [playerName], (err, res) => {
+        if (err) {
+            console.log(err.stack);
+            response.status(500).send({ success: false, message: 'Database query error' }); // Senden einer JSON-Antwort
+        } else {
+            if (res.rows.length === 0) {
+                response.status(404).send({ success: false, message: 'Player not found' }); // Senden einer JSON-Antwort
+            } else {
+                response.status(200).send(res.rows[0]); // Senden des Spieler-Datensatzes als JSON-Antwort
+                console.log(res.rows[0]);
+            }
+        }
+    });
+});
 
 
 module.exports = router;
