@@ -506,13 +506,13 @@ function handleSocketEvents(io) {
 
             tableGLOBAL[room] = table;
 
-            if (table === "multiplechoicequestion") {
+            if (table === "manipulation") {
                 //io.to(room).emit('SHOW_QUESTION_MULTIPLE_CHOICE', question);
-                io.to(room).emit('SET_BUZZER_QUESTION', question);
-                console.log(rooms[room])
+                io.to(room).emit('SET_MANIPULATION_QUESTION', question);
+                console.log(manipulationRooms[room])
             } else {
                 //io.to(room).emit('SHOW_QUESTION_GAP_TEXT', question);
-                io.to(room).emit('SET_BUZZER_QUESTION', question);
+                io.to(room).emit('SET_MANIPULATION_QUESTION', question);
             }
         });
 
