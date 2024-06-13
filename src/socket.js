@@ -17,6 +17,7 @@ client.connect(undefined)
 
 function handleSocketEvents(io) {
     const rooms = {}; // Speichert die Räume und die Spieler darin
+    
     const questions = {}; // Speichert die aktuellen Fragen pro Raum
     const answers = {}; // Speichert die Antworten der Spieler pro Raum
     const roundCounter = {}; // Zählt die Aufrufe von AWAIT_QUESTION pro Raum
@@ -27,6 +28,11 @@ function handleSocketEvents(io) {
     const questionTimers = {}; // Speichert die Timer für die Fragen pro Raum
     const playerTurnTimers = {}; // Speichert die Timer für die Spielerzüge pro Raum
     const tableGLOBAL = {}; // Speichert die Tabellen pro Raum
+
+    const playerPointsManipulation = {}; // Zählt die Punkte der Spieler eine Lobby
+    const playerNamesManipulation = {};
+    const manipulationRooms = {}; // Speichert die Räume und die Spieler darin
+    const playerReadyManipulation = {};
 
     io.on('connection', (socket) => {
         console.log("Socket-Id: " + socket.id);
@@ -93,7 +99,7 @@ function handleSocketEvents(io) {
             });
         });
 
-        
+
         socket.on('PLAYER_BUZZERED', () => {
             const room = getRoom(socket);
             if (!room) return;
@@ -216,11 +222,64 @@ function handleSocketEvents(io) {
 
         });
 
+         // --------------------------------------MANIPULATION GAME MODE---------------------------------------------------------//
+         
+        socket.on('Manipulation_Queue', (playerName) => {
+            console.log("START MANIPULATION QUEUE");
+
+            playerNamesManipulation[socket.id] = playerName;
+            console.log(playerNamesManipulation[socket.id]);
+
+            let roomManipulation = Object.keys(manipulationRooms).find(roomManipulation => manipulationRooms[roomManipulation].length === 1);
+            if (!roomManipulation) {
+                roomManipulation = `roomManipulation-${socket.id}`;
+                manipulationRooms[roomManipulation] = [];
+                playerPointsManipulation[roomManipulation] = {};
+                playerReadyManipulation[roomManipulation] = {};
+            }
+
+            socket.join(roomManipulation);
+            manipulationRooms[roomManipulation].push(socket.id);
+
+            if (manipulationRooms[roomManipulation].length === 2) {
+                const otherPlayer = manipulationRooms[roomManipulation].find(id => id !== socket.id);
+                io.to(otherPlayer).emit('Manipulation_GameFound', true);
+                socket.emit('Manipulation_GameFound', true);
+
+                //startGameCountdownManipulation(socket);
+                sendQuestionToClientManipulation(socket)
+
+            }
+            playerPointsManipulation[roomManipulation][socket.id] = 0;
+        });
+
+        socket.on('Leave_Manipulation_Queue', () => {
+            console.log("LEAVE MANIPUTLATION QUEUE");
+
+            // Find the room the socket is in
+            let room = Object.keys(manipulationRooms).find(room => manipulationRooms[room].includes(socket.id));
+
+            if (room) {
+                // Remove the socket from the room
+                manipulationRooms[room] = manipulationRooms[room].filter(id => id !== socket.id);
+
+                // If the room is now empty, delete it
+                if (manipulationRooms[room].length === 0) {
+                    delete manipulationRooms[room];
+                    delete playerPointsManipulation[room];
+                }
+
+                socket.leave(room);
+                console.log(`Socket ${socket.id} left room ${room}`);
+            }
+        });
     });
 
     function getRoom(socket) {
         return Object.keys(rooms).find(room => rooms[room].includes(socket.id));
     }
+
+
 
     function getGapTextFromDB(callback) {
         const selectedTable = 'gaptextquestion';
@@ -402,6 +461,114 @@ function handleSocketEvents(io) {
             }
 
             io.to(room).emit('BUZZER_COUNTDOWN', remainingSeconds);
+
+        }, 1000);
+    }
+
+    //------------------------------------MANIPULATION GAME MODE------------------------------------------------------------------------------//
+    
+    function getRoomManipulation(socket) {
+        return Object.keys(manipulationRooms).find(room => manipulationRooms[room].includes(socket.id));
+    }
+
+    function getCodeFromDB(callback) {
+        const selectedTable = 'manipulation';
+
+       console.log(selectedTable);
+
+       // Query basierend auf der ausgewählten Tabelle erstellen
+       const query = `SELECT *
+                      FROM manipulation
+                      ORDER BY RANDOM() LIMIT 1`;
+
+       client.query(query, (err, result) => {
+           if (err) {
+               console.error("Error fetching question: ", err);
+               return;
+           }
+           if (result.rows.length > 0) {
+               callback(result.rows[0], selectedTable);
+           } else {
+               console.error("No question found in the database.");
+           }
+       });
+   }
+
+    function sendQuestionToClientManipulation(socket) {
+        const room = getRoomManipulation(socket);
+        if (!room) return;
+
+        roundCounter[room] = (roundCounter[room] || 0) + 1
+        console.log("sendQuestionToClient(): " + roundCounter[room])
+
+        getCodeFromDB((question, table) => {
+            questions[room] = question;
+
+            tableGLOBAL[room] = table;
+
+            if (table === "multiplechoicequestion") {
+                //io.to(room).emit('SHOW_QUESTION_MULTIPLE_CHOICE', question);
+                io.to(room).emit('SET_BUZZER_QUESTION', question);
+                console.log(rooms[room])
+            } else {
+                //io.to(room).emit('SHOW_QUESTION_GAP_TEXT', question);
+                io.to(room).emit('SET_BUZZER_QUESTION', question);
+            }
+        });
+
+        if(roundCounter[room] > 1){
+            questionTimers[room] = startTimerBuzzer(socket);
+        }
+
+    }
+    // Funktion, um den Timer zu starten
+    function startTimerManipulation(socket) {
+        const room = getRoomManipulation(socket);
+        const otherPlayer = manipulationRooms[room].find(id => id !== socket.id);
+
+        let remainingSeconds = buzzerTimerDuration / 1000; // Gesamte Anzahl von Sekunden
+
+        const timer = setInterval(() => {
+            remainingSeconds--; // Reduziere die verbleibenden Sekunden um 1
+
+            /*
+            // Sende die verbleibenden Sekunden an den Client
+            io.to(room).emit('BUZZER_TIMER_TICK', remainingSeconds);
+
+            if (remainingSeconds <= 0) {
+                const correctAnswer = questions[room].solution;
+
+                clearInterval(timer); // Stoppe den Timer, wenn die Zeit abgelaufen ist
+                io.to(otherPlayer).emit('ENABLE_BUZZER');
+
+                socket.emit('END_ROUND', "unentschieden", correctAnswer, playerPoints[room][socket.id], playerPoints[room][otherPlayer]);
+                io.to(otherPlayer).emit('END_ROUND', "unentschieden", correctAnswer, playerPoints[room][otherPlayer], playerPoints[room][socket.id])
+
+                resetRoomQuestion(socket);
+            }
+                */
+        }, 1000); // Wiederhole alle 1000ms (1 Sekunde)
+
+        return timer; // Gib den Timer zurück, um darauf zugreifen zu können
+    }
+    
+    function startGameCountdownManipulation(socket) {
+        const room = getRoomManipulation(socket);
+        let remainingSeconds = 5;
+
+        const timer = setInterval(() => {
+            remainingSeconds--;
+
+            if (remainingSeconds <= 0) {
+                clearInterval(timer);
+
+                // Starte den Timer
+
+                io.to(room).emit('MANIPULATION_QUESTION_TYPE', tableGLOBAL[room]);
+                questionTimers[room] = startTimerManipulation(socket);
+            }
+
+            io.to(room).emit('MANIPULATION_COUNTDOWN', remainingSeconds);
 
         }, 1000);
     }
