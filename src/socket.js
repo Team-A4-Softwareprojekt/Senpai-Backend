@@ -246,8 +246,11 @@ function handleSocketEvents(io) {
                 io.to(otherPlayer).emit('Manipulation_GameFound', true);
                 socket.emit('Manipulation_GameFound', true);
 
-                //startGameCountdownManipulation(socket);
+                startGameCountdownManipulation(socket);
                 sendQuestionToClientManipulation(socket)
+                // spieler 1 und spieler zwei emiten
+                io.to(otherPlayer).emit('PLAYER_ONE_MANIPULATION', playerNamesManipulation[socket.id]);
+                socket.emit('PLAYER_TWO_MANIPULATION', playerNamesManipulation[otherPlayer]);
 
             }
             playerPointsManipulation[roomManipulation][socket.id] = 0;
@@ -272,6 +275,15 @@ function handleSocketEvents(io) {
                 socket.leave(room);
                 console.log(`Socket ${socket.id} left room ${room}`);
             }
+        });
+
+        socket.on('SUMBIT_CHANGES_MANIPULATION', (code) => {
+            console.log("SUBMIT CHANGES MANIPULATION");
+            const room = getRoomManipulation(socket);
+            const otherPlayer = manipulationRooms[room].find(id => id !== socket.id);
+            // Sende 'ENABLE_INPUT_MANIPULATION' an den anderen Spieler
+            socket.to(otherPlayer).emit('ENABLE_INPUT_MANIPULATION', code);
+            console.log(code);
         });
     });
 
@@ -531,10 +543,10 @@ function handleSocketEvents(io) {
         const timer = setInterval(() => {
             remainingSeconds--; // Reduziere die verbleibenden Sekunden um 1
 
-            /*
+            
             // Sende die verbleibenden Sekunden an den Client
             io.to(room).emit('BUZZER_TIMER_TICK', remainingSeconds);
-
+/*
             if (remainingSeconds <= 0) {
                 const correctAnswer = questions[room].solution;
 
@@ -565,9 +577,9 @@ function handleSocketEvents(io) {
                 // Starte den Timer
 
                 io.to(room).emit('MANIPULATION_QUESTION_TYPE', tableGLOBAL[room]);
-                questionTimers[room] = startTimerManipulation(socket);
+                //questionTimers[room] = startTimerManipulation(socket);
             }
-
+            console.log("Countdown: " + remainingSeconds);
             io.to(room).emit('MANIPULATION_COUNTDOWN', remainingSeconds);
 
         }, 1000);
