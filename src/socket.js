@@ -309,6 +309,13 @@ function handleSocketEvents(io) {
         } else {
             io.to(otherPlayer).emit("END_BUZZER_GAME", playerPoints[room][otherPlayer], playerPoints[room][socket.id])
             socket.emit("END_BUZZER_GAME", playerPoints[room][socket.id], playerPoints[room][otherPlayer])
+
+            // Lebenspunkte verringern, wenn das Spiel beendet ist
+            if (playerPoints[room][socket.id] < playerPoints[room][otherPlayer]) {
+                decreaseLivesIfNotSubscribed(playerNames[socket.id]);
+            } else if (playerPoints[room][otherPlayer] < playerPoints[room][socket.id]) {
+                decreaseLivesIfNotSubscribed(playerNames[otherPlayer]);
+            }
         }
     }
 
@@ -406,6 +413,20 @@ function handleSocketEvents(io) {
         }, 1000);
     }
 
+    async function decreaseLivesIfNotSubscribed(playerName) {
+        try {
+            const res = await client.query('SELECT lives, subscribed FROM player WHERE playername = $1', [playerName]);
+            if (res.rows.length > 0) {
+                const { lives, subscribed } = res.rows[0];
+                if (!subscribed && lives > 0) {
+                    await client.query('UPDATE player SET lives = lives - 1 WHERE playername = $1 AND lives > 0', [playerName]);
+                    console.log(`Lives decreased for player: ${playerName}`);
+                }
+            }
+        } catch (err) {
+            console.error('Error updating lives:', err);
+        }
+    }
 
 }
 
