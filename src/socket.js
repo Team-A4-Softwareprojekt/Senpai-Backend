@@ -277,7 +277,7 @@ function handleSocketEvents(io) {
             }
         });
 
-        socket.on('SUMBIT_CHANGES_MANIPULATION', (code) => {
+        socket.on('SUBMIT_CHANGES_MANIPULATION', (code) => {
             console.log("SUBMIT CHANGES MANIPULATION");
             const room = getRoomManipulation(socket);
             const otherPlayer = manipulationRooms[room].find(id => id !== socket.id);
