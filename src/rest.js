@@ -161,16 +161,125 @@ router.post('/changeEmail', (request, response) => {
     });
 });
 
-router.post('/changePassword', (request, response) => {});
+router.post('/changePassword', (request, response) => {
+    const { playerName, newPassword } = request.body;
 
-router.post('/startSubscription', (request, response) => {});
+    client.query('UPDATE player SET playerpassword = $1 WHERE playername = $2', [newPassword, playerName], (err, res) => {
+        if (err) {
+            console.error('Error executing query', err.stack);
+            return response.status(500).json({ success: false, message: 'Database query error' });
+        }
 
-router.post('/deleteAccount', (request, response) => {});
+        if (res.rowCount === 0) {
+            return response.status(404).json({ success: false, message: 'Player not found' });
+        }
 
-router.post('/forgotPassword', (request, response) => {});
+        response.status(200).json({ success: true, message: 'Password updated successfully' });
 
-router.post('/cancelSubscription', (request, response) => {});
+    });
+});
 
-router.post('/buyCurrency', (request, response) => {});
+function setEndDateSubscription(playerName) {
+    client.query('UPDATE player SET subenddate = CURRENT_DATE + INTERVAL \'30 days\' WHERE playername = $1', [playerName], (err, res) => {
+        if (err) {
+            console.error('Error executing query', err.stack);
+
+        }
+
+        if (res.rowCount === 0) {
+            console.error('SUBENDDATE: Player could not be found');
+        }
+    });
+}
+
+router.post('/startSubscription', (request, response) => {
+    const {playerName} = request.body;
+
+    client.query('UPDATE player SET subscribed = true WHERE playername = $1 AND credit > 10', [playerName], (err, res) => {
+        if (err) {
+            console.error('Error executing query', err.stack);
+            return response.status(500).json({ success: false, message: 'Database query error' });
+        }
+
+        if (res.rowCount === 0) {
+            return response.status(404).json({ success: false, message: 'Your credit is not sufficient.' });
+        }
+
+        setEndDateSubscription(playerName);
+        response.status(200).json({ success: true, message: 'successfully subscribed!' });
+    });
+});
+
+router.post('/deleteAccount', (request, response) => {
+    const {playerName} = request.body;
+
+    client.query('DELETE FROM player WHERE playername = $1', [playerName], (err, res) => {
+        if (err) {
+            console.error('Error executing query', err.stack);
+            return response.status(500).json({ success: false, message: 'Database query error' });
+        }
+
+        if (res.rowCount === 0) {
+            return response.status(404).json({ success: false, message: 'Player not found' });
+        }
+
+        response.status(200).json({ success: true, message: 'Your Account has been successfully deleted!' });
+    });
+});
+
+router.post('/forgotPassword', async (request, response) => {
+    const {email, newPassword, safetyQuestion, safetyAnswer} = request.body;
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    client.query('UPDATE player SET password = $1 WHERE email = $2 AND playersecurityquestion = $3 AND securityquestionresponse = $4', [hashedPassword, email, safetyQuestion, safetyAnswer], (err, res) => {
+        if (err) {
+            console.error('Error executing query', err.stack);
+            return response.status(500).json({success: false, message: 'Database query error'});
+        }
+
+        if (res.rowCount === 0) {
+            return response.status(404).json({success: false, message: 'Please check the provided information.'});
+        }
+
+        response.status(200).json({success: true, message: 'successfully subscribed!'});
+    });
+});
+
+router.post('/cancelSubscription', (request, response) => {
+
+    const {playerName} = request.body;
+
+    client.query('UPDATE player SET subscribed = false WHERE playername = $1', [playerName], (err, res) => {
+        if (err) {
+            console.error('Error executing query', err.stack);
+            return response.status(500).json({ success: false, message: 'Database query error' });
+        }
+
+        if (res.rowCount === 0) {
+            return response.status(404).json({ success: false, message: 'Your credit is not sufficient.' });
+        }
+
+        response.status(200).json({ success: true, message: 'successfully unsubscribed!' });
+    });
+});
+
+router.post('/buyCurrency', (request, response) => {
+
+    const {playerName, amount} = request.body;
+
+    client.query('UPDATE player SET credit = credit + $1 WHERE playername = $2', [amount, playerName], (err, res) => {
+        if (err) {
+            console.error('Error executing query', err.stack);
+            return response.status(500).json({ success: false, message: 'Database query error' });
+        }
+
+        if (res.rowCount === 0) {
+            return response.status(404).json({ success: false, message: 'Player not found' });
+        }
+
+        response.status(200).json({ success: true, message: 'successfully increased your credit!' });
+    });
+});
 
 module.exports = router;
