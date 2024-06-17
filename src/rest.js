@@ -18,14 +18,6 @@ client.connect(undefined)
     .catch(err => console.error('Verbindung fehlgeschlagen', err));
 
 
-router.get("/forgotPassword", (request, response) => {
-//TODO SQL Abfrage: select playersecurityquestion, securityquestionresponse from player where email=$1
-//oder select playersecurityquestion from player where email=$1
-//und select securityquestionresponse from player where email=$1
-//falls Abfragen nacheinander erfolgen sollen
-//zum pw ändern: update player set playerpassword=$2 where email=$1
-});
-
 
 router.post('/register', (req, res) => {
     const {username, email, password, securityQuestion, securityAnswer} = req.body;
@@ -107,7 +99,6 @@ router.post('/login', (req, res) => {
     });
 });
 
-
 router.get('/security-questions', (req, res) => {
     client.query('SELECT unnest(enum_range(null::securityquestion));', (err, dbRes) => {
         if (err) {
@@ -120,8 +111,6 @@ router.get('/security-questions', (req, res) => {
         }
     });
 });
-
-
 
 router.get("/connection_test", (request, response) => {
     const testdata = request.query.data;
@@ -153,5 +142,35 @@ router.post('/loadAccountData', (request, response) => {
     });
 });
 
+router.post('/changeEmail', (request, response) => {
+    const { playerName, newEmail } = request.body;
+
+
+    // Update the player's email in the database
+    client.query('UPDATE player SET email = $1 WHERE playername = $2', [newEmail, playerName], (err, res) => {
+        if (err) {
+            console.error('Error executing query', err.stack);
+            return response.status(500).json({ success: false, message: 'Database query error' });
+        }
+
+        if (res.rowCount === 0) {
+            return response.status(404).json({ success: false, message: 'Player not found' });
+        }
+
+        response.status(200).json({ success: true, message: 'Email updated successfully' });
+    });
+});
+
+router.post('/changePassword', (request, response) => {});
+
+router.post('/startSubscription', (request, response) => {});
+
+router.post('/deleteAccount', (request, response) => {});
+
+router.post('/forgotPassword', (request, response) => {});
+
+router.post('/cancelSubscription', (request, response) => {});
+
+router.post('/buyCurrency', (request, response) => {});
 
 module.exports = router;
