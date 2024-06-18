@@ -285,9 +285,11 @@ function handleSocketEvents(io) {
             console.log("SUBMIT CHANGES MANIPULATION");
             const room = getRoomManipulation(socket);
             const otherPlayer = manipulationRooms[room].find(id => id !== socket.id);
-            // Sende 'ENABLE_INPUT_MANIPULATION' an den anderen Spieler
-            socket.to(otherPlayer).emit('ENABLE_INPUT_MANIPULATION', {code, answer});
-            console.log(code);
+           // Ensure that `otherPlayer` is correctly identified before emitting
+            if (otherPlayer) {
+                io.to(otherPlayer).emit('ENABLE_INPUT_MANIPULATION', { code, answer });
+                console.log(code);
+            }
         });
 
         socket.on('ROUND_END_MANIPULATION', (rightAnswer) => {
@@ -298,10 +300,12 @@ function handleSocketEvents(io) {
             /*if(roundEndManipulationCounter <= 3){
             }*/
             const otherPlayer = manipulationRooms[room].find(id => id !== socket.id);
-            // Sende 'ENABLE_INPUT_MANIPULATION' an den anderen Spieler
-            socket.to(otherPlayer).emit('START_NEW_ROUND_MANIPULATION');
-            console.log("start new round");
-            socket.emit('START_NEW_ROUND_MANIPULATION');
+            if (otherPlayer) {
+                socket.to(otherPlayer).emit('START_NEW_ROUND_MANIPULATION');
+                console.log("start new round");
+                socket.emit('START_NEW_ROUND_MANIPULATION');
+                sendQuestionToClientManipulation(socket);
+            }
 
         });
     });
@@ -528,9 +532,9 @@ function handleSocketEvents(io) {
     function sendQuestionToClientManipulation(socket) {
         const room = getRoomManipulation(socket);
         if (!room) return;
-
-        roundCounter[room] = (roundCounter[room] || 0) + 1
-        console.log("sendQuestionToClient(): " + roundCounter[room])
+        /*roundCounter[room] = (roundCounter[room] || 0) + 1*/ 
+        
+        console.log("sendQuestionToClient");
 
         getCodeFromDB((question, table) => {
             questions[room] = question;
@@ -538,20 +542,24 @@ function handleSocketEvents(io) {
             tableGLOBAL[room] = table;
 
             if (table === "manipulation") {
+                console.log(manipulationRooms[room]);
                 const otherPlayer = manipulationRooms[room].find(id => id !== socket.id);
                 // Sende 'ENABLE_INPUT_MANIPULATION' an den anderen Spieler
                 socket.to(otherPlayer).emit('SET_MANIPULATION_QUESTION', question);
                 socket.emit('SET_MANIPULATION_QUESTION', question);
-                console.log(manipulationRooms[room])
+                
             } else {
                 //io.to(room).emit('SHOW_QUESTION_GAP_TEXT', question);
                 io.to(room).emit('SET_MANIPULATION_QUESTION', question);
             }
         });
 
+        /*
         if(roundCounter[room] > 1){
             questionTimers[room] = startTimerBuzzer(socket);
         }
+        */
+        
 
     }
     // Funktion, um den Timer zu starten
