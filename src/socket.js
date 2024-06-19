@@ -49,6 +49,7 @@ function handleSocketEvents(io) {
 
             if (rooms[room].length === 2) {
                 const otherPlayer = rooms[room].find(id => id !== socket.id);
+                answers[room] = answers[room] || {};
 
                 io.to(otherPlayer).emit('Buzzer_GameFound', true);
                 socket.emit('Buzzer_GameFound', true);
@@ -73,7 +74,15 @@ function handleSocketEvents(io) {
                 // If the room is now empty, delete it
                 if (rooms[room].length === 0) {
                     delete rooms[room];
+                    delete questions[room];
+                    delete answers[room];
+                    delete roundCounter[room];
                     delete playerPoints[room];
+                    delete playerNames[room];
+                    delete playerReady[room];
+                    delete questionTimers[room]; // Speichert die Timer für die Fragen pro Raum
+                    delete playerTurnTimers[room]; // Speichert die Timer für die Spielerzüge pro Raum
+                    delete tableGLOBAL[room];
                 }
 
                 socket.leave(room);
@@ -85,7 +94,7 @@ function handleSocketEvents(io) {
         socket.on('REQUEST_DAILY_CHALLENGE_QUESTION', () => {
             getGapTextFromDB((question, table) => {
                 io.to(socket.id).emit('BUZZER_QUESTION_TYPE', table);
-                if(table === "gaptextquestion") {
+                if (table === "gaptextquestion") {
                     io.to(socket.id).emit('RECEIVE_QUESTION_GAP_TEXT', question);
                 } else {
                     io.to(socket.id).emit('RECEIVE_QUESTION_MULTIPLE_CHOICE', question);
@@ -93,7 +102,7 @@ function handleSocketEvents(io) {
             });
         });
 
-        
+
         socket.on('PLAYER_BUZZERED', () => {
             const room = getRoom(socket);
             if (!room) return;
@@ -105,8 +114,11 @@ function handleSocketEvents(io) {
             const otherPlayer = rooms[room].find(id => id !== socket.id);
             io.to(otherPlayer).emit('DISABLE_BUZZER');
 
+
             // Informiere den Gegner, dass der Buzzer zuerst gedrückt wurde
-            io.to(otherPlayer).emit('OPPONENT_BUZZERED');
+            if (!answers[room][otherPlayer]) {
+                io.to(otherPlayer).emit('OPPONENT_BUZZERED');
+            }
 
             // Starte den Timer für den Spielerzug
             playerTurnTimers[room] = startPlayerTurnTimer(socket);
@@ -121,7 +133,7 @@ function handleSocketEvents(io) {
 
             //hier muss sichergestellt werden, dass über questions[room].correctAnswer auf die Antwort zugegriffen werden kann
             const correctAnswer = questions[room].solution;
-            answers[room] = answers[room] || {};
+            //answers[room] = answers[room] || {};
             answers[room][socket.id] = answer;
 
             const otherPlayer = rooms[room].find(id => id !== socket.id);
@@ -180,6 +192,9 @@ function handleSocketEvents(io) {
             delete playerPoints[room];
             delete playerNames[room];
             delete playerReady[room];
+            delete questionTimers[room]; // Speichert die Timer für die Fragen pro Raum
+            delete playerTurnTimers[room]; // Speichert die Timer für die Spielerzüge pro Raum
+            delete tableGLOBAL[room];
 
 
         });
@@ -193,6 +208,10 @@ function handleSocketEvents(io) {
                 if (otherPlayer) {
                     io.to(otherPlayer).emit('OPPONENT_DISCONNECTED');
                 }
+
+                clearInterval(playerTurnTimers[room]);
+                clearInterval(questionTimers[room]);
+
                 delete rooms[room];
                 delete questions[room];
                 delete answers[room];
@@ -200,6 +219,9 @@ function handleSocketEvents(io) {
                 delete playerPoints[room];
                 delete playerNames[room];
                 delete playerReady[room];
+                delete questionTimers[room];
+                delete playerTurnTimers[room];
+                delete tableGLOBAL[room];
 
                 socket.leave(room);
             }
@@ -246,7 +268,7 @@ function handleSocketEvents(io) {
     }
 
     function getMultipleChoiceFromDB(callback) {
-         const selectedTable = 'multiplechoicequestion';
+        const selectedTable = 'multiplechoicequestion';
 
         console.log(selectedTable)
 
@@ -290,7 +312,7 @@ function handleSocketEvents(io) {
             }
         });
 
-        if(roundCounter[room] > 1){
+        if (roundCounter[room] > 1) {
             questionTimers[room] = startTimerBuzzer(socket);
         }
 
@@ -346,7 +368,7 @@ function handleSocketEvents(io) {
     function startPlayerTurnTimer(socket) {
         const room = getRoom(socket);
 
-        answers[room] = answers[room] || {};
+        //answers[room] = answers[room] || {};
 
         let remainingSeconds = 5; // Anzahl von Sekunden für den Spielerzug
 
