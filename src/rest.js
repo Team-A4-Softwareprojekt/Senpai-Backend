@@ -144,7 +144,7 @@ router.post('/loadAccountData', (request, response) => {
 
 router.post('/changeEmail', (request, response) => {
     const { playerName, newEmail } = request.body;
-
+    console.log(request.body);
 
     // Update the player's email in the database
     client.query('UPDATE player SET email = $1 WHERE playername = $2', [newEmail, playerName], (err, res) => {
@@ -161,20 +161,23 @@ router.post('/changeEmail', (request, response) => {
     });
 });
 
-router.post('/changePassword', (request, response) => {
-    const { playerName, newPassword } = request.body;
+router.post('/changePassword', async (request, response) => {
+    const {playerName, newPassword} = request.body;
+    console.log(request.body);
 
-    client.query('UPDATE player SET playerpassword = $1 WHERE playername = $2', [newPassword, playerName], (err, res) => {
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    client.query('UPDATE player SET playerpassword = $1 WHERE playername = $2', [hashedPassword, playerName], (err, res) => {
         if (err) {
             console.error('Error executing query', err.stack);
-            return response.status(500).json({ success: false, message: 'Database query error' });
+            return response.status(500).json({success: false, message: 'Database query error'});
         }
 
         if (res.rowCount === 0) {
-            return response.status(404).json({ success: false, message: 'Player not found' });
+            return response.status(404).json({success: false, message: 'Player not found'});
         }
 
-        response.status(200).json({ success: true, message: 'Password updated successfully' });
+        response.status(200).json({success: true, message: 'Password updated successfully'});
 
     });
 });
@@ -193,9 +196,10 @@ function setEndDateSubscription(playerName) {
 }
 
 router.post('/startSubscription', (request, response) => {
-    const {playerName} = request.body;
+    const {playerName, subEndDate} = request.body;
+    console.log(request.body);
 
-    client.query('UPDATE player SET subscribed = true WHERE playername = $1 AND credit > 10', [playerName], (err, res) => {
+    client.query('UPDATE player SET subscribed = true, credit = credit-5, subenddate = $2 WHERE playername = $1 AND credit >= 5', [playerName, subEndDate], (err, res) => {
         if (err) {
             console.error('Error executing query', err.stack);
             return response.status(500).json({ success: false, message: 'Database query error' });
@@ -205,7 +209,7 @@ router.post('/startSubscription', (request, response) => {
             return response.status(404).json({ success: false, message: 'Your credit is not sufficient.' });
         }
 
-        setEndDateSubscription(playerName);
+        //setEndDateSubscription(playerName);
         response.status(200).json({ success: true, message: 'successfully subscribed!' });
     });
 });
