@@ -33,7 +33,13 @@ function handleSocketEvents(io) {
     const playerNamesManipulation = {};
     const manipulationRooms = {}; // Speichert die Räume und die Spieler darin
     const playerReadyManipulation = {};
+
+    const hasPlayerSubmited = {};
+    const hasPlayerFinished = {};
+    const changedCode = {};
     let roundEndManipulationCounter = 0;
+    
+
 
     io.on('connection', (socket) => {
         console.log("Socket-Id: " + socket.id);
@@ -301,18 +307,36 @@ function handleSocketEvents(io) {
         });
 
         socket.on('SUBMIT_CHANGES_MANIPULATION', (data) => {
-            const code = data.code;
-            const answer = data.expectedOutput;
-
             console.log("SUBMIT CHANGES MANIPULATION");
             const room = getRoomManipulation(socket);
             const otherPlayer = manipulationRooms[room].find(id => id !== socket.id);
-           // Ensure that `otherPlayer` is correctly identified before emitting
+        
+            hasPlayerSubmited[room] = hasPlayerSubmited[room] || {};
+            changedCode[room] = changedCode[room] || {};
+            hasPlayerSubmited[room][socket.id] = true;
+            changedCode[room][socket.id] = data;
+        
+            // Ensure that `otherPlayer` is correctly identified before emitting
             if (otherPlayer) {
-                io.to(otherPlayer).emit('ENABLE_INPUT_MANIPULATION', { code, answer });
-                console.log(code);
+                if (hasPlayerSubmited[room][otherPlayer]) {
+                    io.to(socket.id).emit('SWITCH_PAGE_MANIPULATION');
+                    io.to(otherPlayer).emit('SWITCH_PAGE_MANIPULATION');
+        
+                    // Use setTimeout for a 1-second delay before enabling input manipulation
+                    setTimeout(() => {
+                        io.to(socket.id).emit('ENABLE_INPUT_MANIPULATION', {
+                            code: changedCode[room][otherPlayer].code,
+                            answer: changedCode[room][otherPlayer].expectedOutput
+                        });
+                        io.to(otherPlayer).emit('ENABLE_INPUT_MANIPULATION', {
+                            code: changedCode[room][socket.id].code,
+                            answer: changedCode[room][socket.id].expectedOutput
+                        });
+                    }, 1000); // 1000 milliseconds = 1 second
+                }
             }
         });
+        
 
         socket.on('ROUND_END_MANIPULATION', (rightAnswer) => {
             roundEndManipulationCounter++;
@@ -322,11 +346,20 @@ function handleSocketEvents(io) {
             /*if(roundEndManipulationCounter <= 3){
             }*/
             const otherPlayer = manipulationRooms[room].find(id => id !== socket.id);
+            
+            hasPlayerFinished[room] = hasPlayerFinished[room] || {};
+            hasPlayerFinished[room][socket.id] = true;
+
             if (otherPlayer) {
-                socket.to(otherPlayer).emit('START_NEW_ROUND_MANIPULATION');
-                console.log("start new round");
-                socket.emit('START_NEW_ROUND_MANIPULATION');
-                sendQuestionToClientManipulation(socket);
+                if(hasPlayerFinished[room][otherPlayer]){
+                    io.to(socket.id).emit('START_NEW_ROUND_MANIPULATION');
+                    io.to(otherPlayer).emit('START_NEW_ROUND_MANIPULATION');
+                    console.log("start new round");
+                    sendQuestionToClientManipulation(socket);
+
+                    hasPlayerSubmited[room] = {};
+                    hasPlayerFinished[room] = {};
+                }
             }
 
         });
@@ -559,7 +592,7 @@ function handleSocketEvents(io) {
        // Query basierend auf der ausgewählten Tabelle erstellen
        const query = `SELECT *
                       FROM manipulation
-                      ORDER BY RANDOM() LIMIT 1`;
+                      ORDER BY RANDOM() LIMIT 2`;
 
        client.query(query, (err, result) => {
            if (err) {
@@ -567,7 +600,7 @@ function handleSocketEvents(io) {
                return;
            }
            if (result.rows.length > 0) {
-               callback(result.rows[0], selectedTable);
+               callback(result.rows[0], selectedTable, result.rows[1]);
            } else {
                console.error("No question found in the database.");
            }
@@ -581,8 +614,8 @@ function handleSocketEvents(io) {
         
         console.log("sendQuestionToClient");
 
-        getCodeFromDB((question, table) => {
-            questions[room] = question;
+        getCodeFromDB((question, table, question2) => {
+            questions[room] = {question, question2};
 
             tableGLOBAL[room] = table;
 
@@ -591,11 +624,8 @@ function handleSocketEvents(io) {
                 const otherPlayer = manipulationRooms[room].find(id => id !== socket.id);
                 // Sende 'ENABLE_INPUT_MANIPULATION' an den anderen Spieler
                 socket.to(otherPlayer).emit('SET_MANIPULATION_QUESTION', question);
-                socket.emit('SET_MANIPULATION_QUESTION', question);
+                socket.emit('SET_MANIPULATION_QUESTION', question2);
                 
-            } else {
-                //io.to(room).emit('SHOW_QUESTION_GAP_TEXT', question);
-                io.to(room).emit('SET_MANIPULATION_QUESTION', question);
             }
         });
 
