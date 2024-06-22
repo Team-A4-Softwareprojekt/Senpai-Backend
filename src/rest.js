@@ -273,4 +273,26 @@ router.post('/buyCurrency', (request, response) => {
     });
 });
 
+router.post('/streakForToday', (request, response) => {
+    const {playerName} = request.body;
+
+    client.query('UPDATE player SET streaktoday = true WHERE playername = $1', [playerName], (err, res) => {
+        if (err) {
+            console.error('Error executing query', err.stack);
+            return response.status(500).json({ success: false, message: 'Database query error' });
+        }
+
+        if (res.rowCount === 0) {
+            return response.status(404).json({ success: false, message: 'Player not found' });
+        }
+
+        response.status(200).json({ success: true, message: 'Great job, you completed the daily challenge!' });
+    });
+
+
+});
+
+
+
+
 module.exports = router;
