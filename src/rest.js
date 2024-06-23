@@ -144,7 +144,7 @@ router.post('/loadAccountData', (request, response) => {
 
 router.post('/changeEmail', (request, response) => {
     const { playerName, newEmail } = request.body;
-
+    console.log(request.body);
 
     // Update the player's email in the database
     client.query('UPDATE player SET email = $1 WHERE playername = $2', [newEmail, playerName], (err, res) => {
@@ -161,41 +161,32 @@ router.post('/changeEmail', (request, response) => {
     });
 });
 
-router.post('/changePassword', (request, response) => {
-    const { playerName, newPassword } = request.body;
+router.post('/changePassword', async (request, response) => {
+    const {playerName, newPassword} = request.body;
+    console.log(request.body);
 
-    client.query('UPDATE player SET playerpassword = $1 WHERE playername = $2', [newPassword, playerName], (err, res) => {
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    client.query('UPDATE player SET playerpassword = $1 WHERE playername = $2', [hashedPassword, playerName], (err, res) => {
         if (err) {
             console.error('Error executing query', err.stack);
-            return response.status(500).json({ success: false, message: 'Database query error' });
+            return response.status(500).json({success: false, message: 'Database query error'});
         }
 
         if (res.rowCount === 0) {
-            return response.status(404).json({ success: false, message: 'Player not found' });
+            return response.status(404).json({success: false, message: 'Player not found'});
         }
 
-        response.status(200).json({ success: true, message: 'Password updated successfully' });
+        response.status(200).json({success: true, message: 'Password updated successfully'});
 
     });
 });
 
-function setEndDateSubscription(playerName) {
-    client.query('UPDATE player SET subenddate = CURRENT_DATE + INTERVAL \'30 days\' WHERE playername = $1', [playerName], (err, res) => {
-        if (err) {
-            console.error('Error executing query', err.stack);
-
-        }
-
-        if (res.rowCount === 0) {
-            console.error('SUBENDDATE: Player could not be found');
-        }
-    });
-}
-
 router.post('/startSubscription', (request, response) => {
-    const {playerName} = request.body;
+    const {playerName, subEndDate} = request.body;
+    console.log(request.body);
 
-    client.query('UPDATE player SET subscribed = true WHERE playername = $1 AND credit > 10', [playerName], (err, res) => {
+    client.query('UPDATE player SET subscribed = true, credit = credit-5, subenddate = $2 WHERE playername = $1 AND credit >= 5', [playerName, subEndDate], (err, res) => {
         if (err) {
             console.error('Error executing query', err.stack);
             return response.status(500).json({ success: false, message: 'Database query error' });
@@ -205,7 +196,6 @@ router.post('/startSubscription', (request, response) => {
             return response.status(404).json({ success: false, message: 'Your credit is not sufficient.' });
         }
 
-        setEndDateSubscription(playerName);
         response.status(200).json({ success: true, message: 'successfully subscribed!' });
     });
 });
@@ -228,11 +218,12 @@ router.post('/deleteAccount', (request, response) => {
 });
 
 router.post('/forgotPassword', async (request, response) => {
-    const {email, newPassword, safetyQuestion, safetyAnswer} = request.body;
+    const {email, password, securityQuestion, securityAnswer} = request.body;
+    console.log(request.body);
 
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    const hashedPassword = await bcrypt.hash(password, 10);
 
-    client.query('UPDATE player SET password = $1 WHERE email = $2 AND playersecurityquestion = $3 AND securityquestionresponse = $4', [hashedPassword, email, safetyQuestion, safetyAnswer], (err, res) => {
+    client.query('UPDATE player SET playerpassword = $1 WHERE email = $2 AND playersecurityquestion = $3 AND securityquestionresponse = $4', [hashedPassword, email, securityQuestion, securityAnswer], (err, res) => {
         if (err) {
             console.error('Error executing query', err.stack);
             return response.status(500).json({success: false, message: 'Database query error'});
@@ -242,7 +233,7 @@ router.post('/forgotPassword', async (request, response) => {
             return response.status(404).json({success: false, message: 'Please check the provided information.'});
         }
 
-        response.status(200).json({success: true, message: 'successfully subscribed!'});
+        response.status(200).json({success: true, message: 'Password changed successfully!'});
     });
 });
 
@@ -278,8 +269,30 @@ router.post('/buyCurrency', (request, response) => {
             return response.status(404).json({ success: false, message: 'Player not found' });
         }
 
-        response.status(200).json({ success: true, message: 'successfully increased your credit!' });
+        response.status(200).json({ success: true, message: 'Successfully increased your credit!' });
     });
 });
+
+router.post('/streakForToday', (request, response) => {
+    const {playerName} = request.body;
+
+    client.query('UPDATE player SET streaktoday = true WHERE playername = $1', [playerName], (err, res) => {
+        if (err) {
+            console.error('Error executing query', err.stack);
+            return response.status(500).json({ success: false, message: 'Database query error' });
+        }
+
+        if (res.rowCount === 0) {
+            return response.status(404).json({ success: false, message: 'Player not found' });
+        }
+
+        response.status(200).json({ success: true, message: 'Great job, you completed the daily challenge!' });
+    });
+
+
+});
+
+
+
 
 module.exports = router;
