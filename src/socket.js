@@ -35,6 +35,8 @@ function handleSocketEvents(io) {
     const playerReadyManipulation = {};
     let roundEndManipulationCounter = 0;
 
+    const usedQuestionIds = new Set(); // Speichert die IDs der bereits gestellten Fragen
+
     io.on('connection', (socket) => {
         console.log("Socket-Id: " + socket.id);
 
@@ -363,21 +365,29 @@ function handleSocketEvents(io) {
 
     function getMultipleChoiceFromDB(callback) {
         const selectedTable = 'multiplechoicequestion';
-
-        console.log(selectedTable)
-
+        console.log(selectedTable);
+    
+        // Erstelle die Liste der bereits verwendeten Frage-IDs
+        const usedIdsArray = Array.from(usedQuestionIds);
+        const usedIdsString = usedIdsArray.length > 0 ? usedIdsArray.join(',') : '-1';
+    
         // Query basierend auf der ausgewählten Tabelle erstellen
         const query = `SELECT *
                        FROM multiplechoicequestion
+                       WHERE mcquestionid NOT IN (${usedIdsString})
                        ORDER BY RANDOM() LIMIT 1`;
-
+    
         client.query(query, (err, result) => {
             if (err) {
                 console.error("Error fetching question: ", err);
                 return;
             }
             if (result.rows.length > 0) {
-                callback(result.rows[0], selectedTable);
+                const question = result.rows[0];
+                console.log("Selected question ID:", question.mcquestionid);
+                usedQuestionIds.add(question.mcquestionid);
+                console.log("Used question IDs:", Array.from(usedQuestionIds));
+                callback(question, selectedTable);
             } else {
                 console.error("No question found in the database.");
             }
@@ -432,6 +442,8 @@ function handleSocketEvents(io) {
             } else if (playerPoints[room][otherPlayer] < playerPoints[room][socket.id]) {
                 decreaseLivesIfNotSubscribed(playerNames[otherPlayer]);
             }
+
+            usedQuestionIds.clear();
         }
     }
 
