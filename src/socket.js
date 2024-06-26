@@ -17,31 +17,30 @@ client.connect(undefined)
 
 function handleSocketEvents(io) {
     const rooms = {}; // Speichert die Räume und die Spieler darin
-    
+
     const questions = {}; // Speichert die aktuellen Fragen pro Raum
     const answers = {}; // Speichert die Antworten der Spieler pro Raum
     const roundCounter = {}; // Zählt die Aufrufe von AWAIT_QUESTION pro Raum
     const playerPoints = {}; // Zählt die Punkte der Spieler eine Lobby
-    const playerNames = {};
-    const playerReady = {};
+    const playerNames = {}; // Speichert die Namen der Spieler pro Raum
+    const playerReady = {}; // Speichert die Bereitschaft der Spieler pro Raum
     const buzzerTimerDuration = 23000; // 23s
     const questionTimers = {}; // Speichert die Timer für die Fragen pro Raum
     const playerTurnTimers = {}; // Speichert die Timer für die Spielerzüge pro Raum
     const tableGLOBAL = {}; // Speichert die Tabellen pro Raum
+    const usedQuestionIds = {}; // Speichert die IDs der bereits gestellten Fragen
 
     const playerPointsManipulation = {}; // Zählt die Punkte der Spieler eine Lobby
-    const playerNamesManipulation = {};
+    const playerNamesManipulation = {}; // Speichert die Namen der Spieler pro Raum
     const manipulationRooms = {}; // Speichert die Räume und die Spieler darin
-    const playerReadyManipulation = {};
+    const playerReadyManipulation = {}; // Speichert die Bereitschaft der Spieler pro Raum
 
-    const hasPlayerSubmited = {};
-    const hasPlayerFinished = {};
-    const changedCode = {};
-    let roundEndManipulationCounter = 0;
-    
+    const hasPlayerFixedCode = {}; // Speichert, ob ein Spieler seinen Code gefixt hat
+    const hasPlayerSubmited = {}; // Speichert, ob ein Spieler seine Änderungen eingereicht hat
+    const hasPlayerFinished = {}; // Speichert, ob ein Spieler die Runde beendet hat
+    const changedCode = {}; // Speichert den geänderten Code
+    const roundEndManipulationCounter = {}; // Zählt die Runden im Manipulation-Modus
 
-
-    const usedQuestionIds = new Set(); // Speichert die IDs der bereits gestellten Fragen
 
     io.on('connection', (socket) => {
         console.log("Socket-Id: " + socket.id);
@@ -88,16 +87,7 @@ function handleSocketEvents(io) {
 
                 // If the room is now empty, delete it
                 if (rooms[room].length === 0) {
-                    delete rooms[room];
-                    delete questions[room];
-                    delete answers[room];
-                    delete roundCounter[room];
-                    delete playerPoints[room];
-                    delete playerNames[room];
-                    delete playerReady[room];
-                    delete questionTimers[room]; // Speichert die Timer für die Fragen pro Raum
-                    delete playerTurnTimers[room]; // Speichert die Timer für die Spielerzüge pro Raum
-                    delete tableGLOBAL[room];
+                    deleteLobby(room);
                 }
 
                 socket.leave(room);
@@ -200,17 +190,7 @@ function handleSocketEvents(io) {
             const room = getRoom(socket);
             if (!room) return;
 
-            delete rooms[room];
-            delete questions[room];
-            delete answers[room];
-            delete roundCounter[room];
-            delete playerPoints[room];
-            delete playerNames[room];
-            delete playerReady[room];
-            delete questionTimers[room]; // Speichert die Timer für die Fragen pro Raum
-            delete playerTurnTimers[room]; // Speichert die Timer für die Spielerzüge pro Raum
-            delete tableGLOBAL[room];
-
+            deleteLobby(room);
 
         });
 
@@ -227,17 +207,7 @@ function handleSocketEvents(io) {
                 clearInterval(playerTurnTimers[room]);
                 clearInterval(questionTimers[room]);
 
-                delete rooms[room];
-                delete questions[room];
-                delete answers[room];
-                delete roundCounter[room];
-                delete playerPoints[room];
-                delete playerNames[room];
-                delete playerReady[room];
-                delete questionTimers[room];
-                delete playerTurnTimers[room];
-                delete tableGLOBAL[room];
-
+                deleteLobby(room);
                 socket.leave(room);
             }
 
@@ -253,13 +223,13 @@ function handleSocketEvents(io) {
 
         });
 
-         // --------------------------------------MANIPULATION GAME MODE---------------------------------------------------------//
-         
+        // --------------------------------------MANIPULATION GAME MODE---------------------------------------------------------//
+
         socket.on('Manipulation_Queue', (playerName) => {
             console.log("START MANIPULATION QUEUE");
 
-            playerNamesManipulation[socket.id] = playerName;
-            console.log(playerNamesManipulation[socket.id]);
+
+            //console.log(playerNamesManipulation[socket.id]);
 
             let roomManipulation = Object.keys(manipulationRooms).find(roomManipulation => manipulationRooms[roomManipulation].length === 1);
             if (!roomManipulation) {
@@ -267,9 +237,11 @@ function handleSocketEvents(io) {
                 manipulationRooms[roomManipulation] = [];
                 playerPointsManipulation[roomManipulation] = {};
                 playerReadyManipulation[roomManipulation] = {};
+                playerNamesManipulation[roomManipulation] = {};
             }
 
             socket.join(roomManipulation);
+            playerNamesManipulation[roomManipulation][socket.id] = playerName;
             manipulationRooms[roomManipulation].push(socket.id);
 
             if (manipulationRooms[roomManipulation].length === 2) {
@@ -280,8 +252,9 @@ function handleSocketEvents(io) {
                 startGameCountdownManipulation(socket);
                 sendQuestionToClientManipulation(socket)
                 // spieler 1 und spieler zwei emiten
+                /*
                 io.to(otherPlayer).emit('PLAYER_ONE_MANIPULATION', playerNamesManipulation[socket.id]);
-                socket.emit('PLAYER_TWO_MANIPULATION', playerNamesManipulation[otherPlayer]);
+                socket.emit('PLAYER_TWO_MANIPULATION', playerNamesManipulation[otherPlayer]);*/
 
             }
             playerPointsManipulation[roomManipulation][socket.id] = 0;
@@ -299,8 +272,7 @@ function handleSocketEvents(io) {
 
                 // If the room is now empty, delete it
                 if (manipulationRooms[room].length === 0) {
-                    delete manipulationRooms[room];
-                    delete playerPointsManipulation[room];
+                    deleteLobby(room);
                 }
 
                 socket.leave(room);
@@ -312,18 +284,18 @@ function handleSocketEvents(io) {
             console.log("SUBMIT CHANGES MANIPULATION");
             const room = getRoomManipulation(socket);
             const otherPlayer = manipulationRooms[room].find(id => id !== socket.id);
-        
+
             hasPlayerSubmited[room] = hasPlayerSubmited[room] || {};
             changedCode[room] = changedCode[room] || {};
             hasPlayerSubmited[room][socket.id] = true;
             changedCode[room][socket.id] = data;
-        
+
             // Ensure that `otherPlayer` is correctly identified before emitting
             if (otherPlayer) {
                 if (hasPlayerSubmited[room][otherPlayer]) {
                     io.to(socket.id).emit('SWITCH_PAGE_MANIPULATION');
                     io.to(otherPlayer).emit('SWITCH_PAGE_MANIPULATION');
-        
+
                     // Use setTimeout for a 1-second delay before enabling input manipulation
                     setTimeout(() => {
                         io.to(socket.id).emit('ENABLE_INPUT_MANIPULATION', {
@@ -338,31 +310,53 @@ function handleSocketEvents(io) {
                 }
             }
         });
-        
 
-        socket.on('ROUND_END_MANIPULATION', (rightAnswer) => {
-            roundEndManipulationCounter++;
+        socket.on('ADD_POINT_MANIPULATION', () => {
+            const room = getRoomManipulation(socket);
+            playerPointsManipulation[room] = playerPointsManipulation[room] || {};
+
+            playerPointsManipulation[room][socket.id] += 1;
+        });
+
+        socket.on('ROUND_END_MANIPULATION', (bool) => {
+
             const room = getRoomManipulation(socket);
             console.log("ROUND END MANIPULATION");
 
-            /*if(roundEndManipulationCounter <= 3){
-            }*/
+            roundEndManipulationCounter[room] = (roundEndManipulationCounter[room] || 0)
+            console.log(roundEndManipulationCounter[room])
             const otherPlayer = manipulationRooms[room].find(id => id !== socket.id);
-            
+
+
+            hasPlayerFixedCode[room] = hasPlayerFixedCode[room] || {};
+            hasPlayerFixedCode[room][socket.id] = bool;
+
+
             hasPlayerFinished[room] = hasPlayerFinished[room] || {};
             hasPlayerFinished[room][socket.id] = true;
 
             if (otherPlayer) {
-                if(hasPlayerFinished[room][otherPlayer]){
-                    io.to(socket.id).emit('START_NEW_ROUND_MANIPULATION');
-                    io.to(otherPlayer).emit('START_NEW_ROUND_MANIPULATION');
-                    console.log("start new round");
-                    sendQuestionToClientManipulation(socket);
+                if (hasPlayerFinished[room][otherPlayer]) {
+                    if (roundEndManipulationCounter[room] < 2) {
+                        roundEndManipulationCounter[room] += 1;
+                        console.log("ROUND END MANIPULATION COUNTER: " + roundEndManipulationCounter[room])
+                        io.to(socket.id).emit('START_NEW_ROUND_MANIPULATION', playerNamesManipulation[room][otherPlayer], hasPlayerFixedCode[room][socket.id], hasPlayerFixedCode[room][otherPlayer], playerPointsManipulation[room][socket.id], playerPointsManipulation[room][otherPlayer]);
+                        io.to(otherPlayer).emit('START_NEW_ROUND_MANIPULATION', playerNamesManipulation[room][socket.id], hasPlayerFixedCode[room][otherPlayer], hasPlayerFixedCode[room][socket.id], playerPointsManipulation[room][otherPlayer], playerPointsManipulation[room][socket.id]);
+                        sendQuestionToClientManipulation(socket);
 
-                    hasPlayerSubmited[room] = {};
-                    hasPlayerFinished[room] = {};
+                        console.log("start new round");
+
+                        hasPlayerSubmited[room] = {};
+                        hasPlayerFinished[room] = {};
+                    } else {
+                        socket.emit('END_MANIPULATION_GAME', playerPointsManipulation[room][socket.id], playerPointsManipulation[room][otherPlayer]);
+                        io.to(otherPlayer).emit('END_MANIPULATION_GAME', playerPointsManipulation[room][otherPlayer], playerPointsManipulation[room][socket.id]);
+
+                        deleteLobby(room);
+                    }
                 }
             }
+
 
         });
     });
@@ -370,7 +364,6 @@ function handleSocketEvents(io) {
     function getRoom(socket) {
         return Object.keys(rooms).find(room => rooms[room].includes(socket.id));
     }
-
 
 
     function getGapTextFromDB(callback) {
@@ -396,20 +389,25 @@ function handleSocketEvents(io) {
         });
     }
 
-    function getMultipleChoiceFromDB(callback) {
+    function getMultipleChoiceFromDB(callback, room) {
         const selectedTable = 'multiplechoicequestion';
         console.log(selectedTable);
-    
-        // Erstelle die Liste der bereits verwendeten Frage-IDs
-        const usedIdsArray = Array.from(usedQuestionIds);
+
+        // Initialisiere usedQuestionIds für den Raum, falls noch nicht vorhanden
+        if (!usedQuestionIds[room]) {
+            usedQuestionIds[room] = new Set();
+        }
+
+        // Erstelle die Liste der bereits verwendeten Frage-IDs für den Raum
+        const usedIdsArray = Array.from(usedQuestionIds[room]);
         const usedIdsString = usedIdsArray.length > 0 ? usedIdsArray.join(',') : '-1';
-    
+
         // Query basierend auf der ausgewählten Tabelle erstellen
         const query = `SELECT *
                        FROM multiplechoicequestion
                        WHERE mcquestionid NOT IN (${usedIdsString})
                        ORDER BY RANDOM() LIMIT 1`;
-    
+
         client.query(query, (err, result) => {
             if (err) {
                 console.error("Error fetching question: ", err);
@@ -418,9 +416,9 @@ function handleSocketEvents(io) {
             if (result.rows.length > 0) {
                 const question = result.rows[0];
                 console.log("Selected question ID:", question.mcquestionid);
-                usedQuestionIds.add(question.mcquestionid);
-                console.log("Used question IDs:", Array.from(usedQuestionIds));
-                callback(question, selectedTable);
+                usedQuestionIds[room].add(question.mcquestionid);
+                console.log("Used question IDs for room", room, ":", Array.from(usedQuestionIds[room]));
+                callback(question, selectedTable, room);
             } else {
                 console.error("No question found in the database.");
             }
@@ -434,7 +432,7 @@ function handleSocketEvents(io) {
         roundCounter[room] = (roundCounter[room] || 0) + 1
         console.log("sendQuestionToClient(): " + roundCounter[room])
 
-        getMultipleChoiceFromDB((question, table) => {
+        getMultipleChoiceFromDB((question, table, room) => {
             questions[room] = question;
 
             tableGLOBAL[room] = table;
@@ -447,7 +445,7 @@ function handleSocketEvents(io) {
                 //io.to(room).emit('SHOW_QUESTION_GAP_TEXT', question);
                 io.to(room).emit('SET_BUZZER_QUESTION', question);
             }
-        });
+        }, room);
 
         if (roundCounter[room] > 1) {
             questionTimers[room] = startTimerBuzzer(socket);
@@ -476,7 +474,6 @@ function handleSocketEvents(io) {
                 decreaseLivesIfNotSubscribed(playerNames[otherPlayer]);
             }
 
-            usedQuestionIds.clear();
         }
     }
 
@@ -579,7 +576,7 @@ function handleSocketEvents(io) {
         try {
             const res = await client.query('SELECT lives, subscribed FROM player WHERE playername = $1', [playerName]);
             if (res.rows.length > 0) {
-                const { lives, subscribed } = res.rows[0];
+                const {lives, subscribed} = res.rows[0];
                 if (!subscribed && lives > 0) {
                     await client.query('UPDATE player SET lives = lives - 1 WHERE playername = $1 AND lives > 0', [playerName]);
                     console.log(`Lives decreased for player: ${playerName}`);
@@ -591,7 +588,7 @@ function handleSocketEvents(io) {
     }
 
     //------------------------------------MANIPULATION GAME MODE------------------------------------------------------------------------------//
-    
+
     function getRoomManipulation(socket) {
         return Object.keys(manipulationRooms).find(room => manipulationRooms[room].includes(socket.id));
     }
@@ -599,35 +596,38 @@ function handleSocketEvents(io) {
     function getCodeFromDB(callback) {
         const selectedTable = 'manipulation';
 
-       console.log(selectedTable);
+        console.log(selectedTable);
 
-       // Query basierend auf der ausgewählten Tabelle erstellen
-       const query = `SELECT *
-                      FROM manipulation
-                      ORDER BY RANDOM() LIMIT 2`;
+        // Query basierend auf der ausgewählten Tabelle erstellen
+        const query = `SELECT *
+                       FROM manipulation
+                       ORDER BY RANDOM() LIMIT 2`;
 
-       client.query(query, (err, result) => {
-           if (err) {
-               console.error("Error fetching question: ", err);
-               return;
-           }
-           if (result.rows.length > 0) {
-               callback(result.rows[0], selectedTable, result.rows[1]);
-           } else {
-               console.error("No question found in the database.");
-           }
-       });
-   }
+        client.query(query, (err, result) => {
+            if (err) {
+                console.error("Error fetching question: ", err);
+                return;
+            }
+            if (result.rows.length > 0) {
+                callback(result.rows[0], selectedTable, result.rows[1]);
+            } else {
+                console.error("No question found in the database.");
+            }
+        });
+    }
 
     function sendQuestionToClientManipulation(socket) {
         const room = getRoomManipulation(socket);
         if (!room) return;
-        /*roundCounter[room] = (roundCounter[room] || 0) + 1*/ 
-        
+        /*roundCounter[room] = (roundCounter[room] || 0) + 1*/
+
         console.log("sendQuestionToClient");
 
         getCodeFromDB((question, table, question2) => {
             questions[room] = {question, question2};
+
+            console.log(question);
+            console.log(question2);
 
             tableGLOBAL[room] = table;
 
@@ -637,7 +637,7 @@ function handleSocketEvents(io) {
                 // Sende 'ENABLE_INPUT_MANIPULATION' an den anderen Spieler
                 socket.to(otherPlayer).emit('SET_MANIPULATION_QUESTION', question);
                 socket.emit('SET_MANIPULATION_QUESTION', question2);
-                
+
             }
         });
 
@@ -646,9 +646,10 @@ function handleSocketEvents(io) {
             questionTimers[room] = startTimerBuzzer(socket);
         }
         */
-        
+
 
     }
+
     // Funktion, um den Timer zu starten
     function startTimerManipulation(socket) {
         const room = getRoomManipulation(socket);
@@ -659,30 +660,30 @@ function handleSocketEvents(io) {
         const timer = setInterval(() => {
             remainingSeconds--; // Reduziere die verbleibenden Sekunden um 1
 
-            
+
             // Sende die verbleibenden Sekunden an den Client
             io.to(room).emit('BUZZER_TIMER_TICK', remainingSeconds);
-/*
-            if (remainingSeconds <= 0) {
-                const correctAnswer = questions[room].solution;
+            /*
+                        if (remainingSeconds <= 0) {
+                            const correctAnswer = questions[room].solution;
 
-                clearInterval(timer); // Stoppe den Timer, wenn die Zeit abgelaufen ist
-                io.to(otherPlayer).emit('ENABLE_BUZZER');
+                            clearInterval(timer); // Stoppe den Timer, wenn die Zeit abgelaufen ist
+                            io.to(otherPlayer).emit('ENABLE_BUZZER');
 
-                socket.emit('END_ROUND', "unentschieden", correctAnswer, playerPoints[room][socket.id], playerPoints[room][otherPlayer]);
-                io.to(otherPlayer).emit('END_ROUND', "unentschieden", correctAnswer, playerPoints[room][otherPlayer], playerPoints[room][socket.id])
+                            socket.emit('END_ROUND', "unentschieden", correctAnswer, playerPoints[room][socket.id], playerPoints[room][otherPlayer]);
+                            io.to(otherPlayer).emit('END_ROUND', "unentschieden", correctAnswer, playerPoints[room][otherPlayer], playerPoints[room][socket.id])
 
-                resetRoomQuestion(socket);
-            }
-                */
+                            resetRoomQuestion(socket);
+                        }
+                            */
         }, 1000); // Wiederhole alle 1000ms (1 Sekunde)
 
         return timer; // Gib den Timer zurück, um darauf zugreifen zu können
     }
-    
+
     function startGameCountdownManipulation(socket) {
         const room = getRoomManipulation(socket);
-        let remainingSeconds = 5;
+        let remainingSeconds = 4;
 
         const timer = setInterval(() => {
             remainingSeconds--;
@@ -701,6 +702,28 @@ function handleSocketEvents(io) {
         }, 1000);
     }
 
+    function deleteLobby(room) {
+        console.log("Lobby deleted.")
+
+        delete rooms[room];
+        delete questions[room];
+        delete answers[room];
+        delete roundCounter[room];
+        delete playerPoints[room];
+        delete playerNames[room];
+        delete playerReady[room];
+        delete questionTimers[room]; // Speichert die Timer für die Fragen pro Raum
+        delete playerTurnTimers[room]; // Speichert die Timer für die Spielerzüge pro Raum
+        delete tableGLOBAL[room];
+        delete playerPointsManipulation[room];
+        delete playerNamesManipulation[room];
+        delete manipulationRooms[room];
+        delete hasPlayerSubmited[room];
+        delete hasPlayerFinished[room];
+        delete changedCode[room];
+        delete usedQuestionIds[room];
+        delete roundEndManipulationCounter[room];
+    }
 
 
 }

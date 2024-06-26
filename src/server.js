@@ -16,6 +16,8 @@ const io = socketIO(server, {
         origin: [
             'http://localhost:5173',
             'http://localhost:5174',
+            'http://localhost:5175',
+            'http://localhost:5176',
             'https://senpai-development.onrender.com',
             'https://senpai-website.onrender.com'
         ],
@@ -31,7 +33,9 @@ const allowedOrigins = [
     'https://senpai-development.onrender.com',
     'https://senpai-website.onrender.com',
     'http://localhost:5173',
-    'http://localhost:5174'
+    'http://localhost:5174',
+    'http://localhost:5175',
+    'http://localhost:5176'
 ];
 
 
