@@ -76,6 +76,7 @@ router.post('/login', (req, res) => {
                 return res.json({success: false});
             } else {
                 const user = dbRes.rows[0];
+
                 if (!user.playerpassword) {
                     // Wenn das playerpassword-Attribut nicht vorhanden ist, sende Misserfolg zurück
                     return res.json({success: false});
@@ -88,7 +89,7 @@ router.post('/login', (req, res) => {
                     }
                     if (result) {
                         // Wenn das Passwort korrekt ist, sende Erfolg und Benutzernamen zurück
-                        return res.json({success: true, username: username});
+                        return res.json({success: true, data: user});
                     } else {
                         // Wenn das Passwort falsch ist, sende Misserfolg zurück
                         return res.json({success: false});
