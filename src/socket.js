@@ -24,7 +24,6 @@ function handleSocketEvents(io) {
     const playerPoints = {}; // Zählt die Punkte der Spieler eine Lobby
     const playerNames = {}; // Speichert die Namen der Spieler pro Raum
     const playerReady = {}; // Speichert die Bereitschaft der Spieler pro Raum
-    const buzzerTimerDuration = 23000; // 23s
     const questionTimers = {}; // Speichert die Timer für die Fragen pro Raum
     const playerTurnTimers = {}; // Speichert die Timer für die Spielerzüge pro Raum
     const tableGLOBAL = {}; // Speichert die Tabellen pro Raum
@@ -482,7 +481,15 @@ function handleSocketEvents(io) {
         const room = getRoom(socket);
         const otherPlayer = rooms[room].find(id => id !== socket.id);
 
-        let remainingSeconds = buzzerTimerDuration / 1000; // Gesamte Anzahl von Sekunden
+        // Bestimmen Sie die Dauer des Timers basierend auf der Rundenanzahl
+        let timerDuration;
+        if (roundCounter[room] === 1) {
+            timerDuration = 20000; // 20 Sekunden für die erste Runde
+        } else {
+            timerDuration = 23000; // 23 Sekunden für alle anderen Runden
+        }
+
+        let remainingSeconds = timerDuration / 1000; // Gesamte Anzahl von Sekunden
 
         const timer = setInterval(() => {
             remainingSeconds--; // Reduziere die verbleibenden Sekunden um 1
