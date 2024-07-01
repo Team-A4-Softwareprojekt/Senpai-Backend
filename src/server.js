@@ -5,6 +5,7 @@ const rest = require('./rest');
 const handleSocketEvents = require('./socket');
 const bodyParser = require('body-parser');
 const cors = require('cors');
+const {initializeIO} = require('./functions');
 
 const PORT = process.env.PORT || 3000; // Set the server port
 
@@ -55,6 +56,7 @@ app.use('/', rest);
 
 // Use the Socket.IO event handlers defined in the 'socket' module
 handleSocketEvents(io);
+initializeIO(io);
 
 /**
  * Start the server and listen for incoming events on the specified port.

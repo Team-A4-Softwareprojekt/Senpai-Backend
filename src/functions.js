@@ -10,6 +10,12 @@ const client = new Client({
     ssl: true
 });
 
+let ioInstance;
+
+function initializeIO(io) {
+    ioInstance = io; // io-Instanz setzen
+}
+
 client.connect(undefined)
     .then(() => console.log('Socket verbunden mit der PostgreSQL-Datenbank'))
     .catch(err => console.error('Verbindung fehlgeschlagen', err));
@@ -117,11 +123,11 @@ function sendQuestionToClient(socket) {
 
         if (table === "multiplechoicequestion") {
             //io.to(room).emit('SHOW_QUESTION_MULTIPLE_CHOICE', question);
-            io.to(room).emit('SET_BUZZER_QUESTION', question);
+            ioInstance.to(room).emit('SET_BUZZER_QUESTION', question);
             console.log(rooms[room])
         } else {
             //io.to(room).emit('SHOW_QUESTION_GAP_TEXT', question);
-            io.to(room).emit('SET_BUZZER_QUESTION', question);
+            ioInstance.to(room).emit('SET_BUZZER_QUESTION', question);
         }
     }, room);
 
@@ -142,7 +148,7 @@ function resetRoomQuestion(socket) {
     if (roundCounter[room] < 3) {
         sendQuestionToClient(socket);
     } else {
-        io.to(otherPlayer).emit("END_BUZZER_GAME", playerPoints[room][otherPlayer], playerPoints[room][socket.id])
+        ioInstance.to(otherPlayer).emit("END_BUZZER_GAME", playerPoints[room][otherPlayer], playerPoints[room][socket.id])
         socket.emit("END_BUZZER_GAME", playerPoints[room][socket.id], playerPoints[room][otherPlayer])
 
         // Lebenspunkte verringern, wenn das Spiel beendet ist
@@ -174,16 +180,16 @@ function startTimerBuzzer(socket) {
         remainingSeconds--; // Reduziere die verbleibenden Sekunden um 1
 
         // Sende die verbleibenden Sekunden an den Client
-        io.to(room).emit('BUZZER_TIMER_TICK', remainingSeconds);
+        ioInstance.to(room).emit('BUZZER_TIMER_TICK', remainingSeconds);
 
         if (remainingSeconds <= 0) {
             const correctAnswer = questions[room].solution;
 
             clearInterval(timer); // Stoppe den Timer, wenn die Zeit abgelaufen ist
-            io.to(otherPlayer).emit('ENABLE_BUZZER');
+            ioInstance.to(otherPlayer).emit('ENABLE_BUZZER');
 
             socket.emit('END_ROUND', "unentschieden", correctAnswer, playerPoints[room][socket.id], playerPoints[room][otherPlayer]);
-            io.to(otherPlayer).emit('END_ROUND', "unentschieden", correctAnswer, playerPoints[room][otherPlayer], playerPoints[room][socket.id])
+            ioInstance.to(otherPlayer).emit('END_ROUND', "unentschieden", correctAnswer, playerPoints[room][otherPlayer], playerPoints[room][socket.id])
 
             resetRoomQuestion(socket);
         }
@@ -204,7 +210,7 @@ function startPlayerTurnTimer(socket) {
         remainingSeconds--; // Reduziere die verbleibenden Sekunden um 1
 
         // Sende die verbleibenden Sekunden an den Client
-        io.to(room).emit('PLAYER_TURN_TIMER_TICK', remainingSeconds);
+        ioInstance.to(room).emit('PLAYER_TURN_TIMER_TICK', remainingSeconds);
 
         if (remainingSeconds <= 0) {
             clearInterval(timer); // Stoppe den Timer, wenn die Zeit abgelaufen ist
@@ -217,16 +223,16 @@ function startPlayerTurnTimer(socket) {
             // Hier die angepasste Logik bei Ablauf des Timers
             if (bothAnswered) {
                 // beide haben falsch geantwortet
-                io.to(otherPlayer).emit('ENABLE_BUZZER');
+                ioInstance.to(otherPlayer).emit('ENABLE_BUZZER');
                 socket.emit('END_ROUND', "unentschieden", correctAnswer, playerPoints[room][socket.id], playerPoints[room][otherPlayer]);
-                io.to(otherPlayer).emit('END_ROUND', "unentschieden", correctAnswer, playerPoints[room][otherPlayer], playerPoints[room][socket.id]);
+                ioInstance.to(otherPlayer).emit('END_ROUND', "unentschieden", correctAnswer, playerPoints[room][otherPlayer], playerPoints[room][socket.id]);
                 resetRoomQuestion(socket);
             } else {
                 // aktueller Spieler hat falsch geantwortet, der andere Spieler darf
                 playerPoints[room][socket.id] -= 1;
                 socket.emit('WRONG_ANSWER');
-                io.to(otherPlayer).emit('ENABLE_BUZZER');
-                io.to(otherPlayer).emit('OPPONENT_WRONG_ANSWER');
+                ioInstance.to(otherPlayer).emit('ENABLE_BUZZER');
+                ioInstance.to(otherPlayer).emit('OPPONENT_WRONG_ANSWER');
 
             }
         }
@@ -247,11 +253,11 @@ function startGameCountdownBuzzer(socket) {
 
             // Starte den Timer
 
-            io.to(room).emit('BUZZER_QUESTION_TYPE', tableGLOBAL[room]);
+            ioInstance.to(room).emit('BUZZER_QUESTION_TYPE', tableGLOBAL[room]);
             questionTimers[room] = startTimerBuzzer(socket);
         }
 
-        io.to(room).emit('BUZZER_COUNTDOWN', remainingSeconds);
+        ioInstance.to(room).emit('BUZZER_COUNTDOWN', remainingSeconds);
 
     }, 1000);
 }
@@ -259,10 +265,14 @@ function startGameCountdownBuzzer(socket) {
 
 async function decreaseLivesIfNotSubscribed(playerName) {
     try {
-        const res = await client.query('SELECT lives, subscribed FROM player WHERE playername = $1', [playerName]);
+        const today = new Date();
+
+        const res = await client.query('SELECT lives, subscribed, subenddate FROM player WHERE playername = $1', [playerName]);
         if (res.rows.length > 0) {
-            const {lives, subscribed} = res.rows[0];
-            if (!subscribed && lives > 0) {
+            const {lives, subscribed, subenddate} = res.rows[0];
+            const subEndDate = new Date(subenddate);
+            const remainingTime = Math.ceil((subEndDate - today) / (1000 * 60 * 60 * 24));
+            if (remainingTime <= 0 && lives > 0) {
                 await client.query('UPDATE player SET lives = lives - 1 WHERE playername = $1 AND lives > 0', [playerName]);
                 console.log(`Lives decreased for player: ${playerName}`);
             }
@@ -340,11 +350,11 @@ function startGameCountdownManipulation(socket) {
             clearInterval(timer);
 
             // Starte den Timer
-            io.to(room).emit('MANIPULATION_QUESTION_TYPE', tableGLOBAL[room]);
+            ioInstance.to(room).emit('MANIPULATION_QUESTION_TYPE', tableGLOBAL[room]);
             //questionTimers[room] = startTimerManipulation(socket);
         }
         console.log("Countdown: " + remainingSeconds);
-        io.to(room).emit('MANIPULATION_COUNTDOWN', remainingSeconds);
+        ioInstance.to(room).emit('MANIPULATION_COUNTDOWN', remainingSeconds);
 
     }, 1000);
 }
@@ -376,16 +386,14 @@ function deleteLobby(room) {
 //------------------------------------- MODULE EXPORT -------------------------------------//
 
 module.exports = {
+    initializeIO,
     getRoom,
     getGapTextFromDB,
-    getMultipleChoiceFromDB,
     sendQuestionToClient,
     resetRoomQuestion,
-    startTimerBuzzer,
     startPlayerTurnTimer,
     startGameCountdownBuzzer,
     getRoomManipulation,
-    getCodeFromDB,
     sendQuestionToClientManipulation,
     startGameCountdownManipulation,
     deleteLobby,

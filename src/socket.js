@@ -361,6 +361,18 @@ function handleSocketEvents(io) {
                         hasPlayerSubmited[room] = {};
                         hasPlayerFinished[room] = {};
                     } else {
+                        console.log(playerNamesManipulation[room][socket.id]);
+                        console.log(playerNamesManipulation[room][otherPlayer]);
+
+                        // Lebenspunkte verringern, wenn das Spiel beendet ist
+                        if (playerPointsManipulation[room][socket.id] < playerPointsManipulation[room][otherPlayer]) {
+                            console.log("decrease lives", playerNamesManipulation[room][socket.id]);
+                            functions.decreaseLivesIfNotSubscribed(playerNamesManipulation[room][socket.id]);
+                        } else if (playerPointsManipulation[room][otherPlayer] < playerPointsManipulation[room][socket.id]) {
+                            console.log("decrease lives", playerNamesManipulation[room][otherPlayer]);
+                            functions.decreaseLivesIfNotSubscribed(playerNamesManipulation[room][otherPlayer]);
+                        }
+
                         socket.emit('END_MANIPULATION_GAME', playerPointsManipulation[room][socket.id], playerPointsManipulation[room][otherPlayer]);
                         io.to(otherPlayer).emit('END_MANIPULATION_GAME', playerPointsManipulation[room][otherPlayer], playerPointsManipulation[room][socket.id]);
 
