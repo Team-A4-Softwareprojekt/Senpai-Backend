@@ -199,23 +199,36 @@ function handleSocketEvents(io) {
         });
 
         /**
-         * Handles the event when a player disconnects from the manipulation game.
+         * Handles the event when a player disconnects from the manipulation/buzzer game.
          */
         socket.on('disconnect', () => {
-            const room = functions.getRoom(socket);
+            const roomBuzzer = functions.getRoom(socket);
             console.log(socket + "disconnected.")
-            if (room) {
+            if (roomBuzzer) {
                 // Informiere den anderen Spieler im Raum über die Trennung
-                const otherPlayer = rooms[room].find(id => id !== socket.id);
+                const otherPlayer = rooms[roomBuzzer].find(id => id !== socket.id);
                 if (otherPlayer) {
                     io.to(otherPlayer).emit('OPPONENT_DISCONNECTED');
                 }
 
-                clearInterval(playerTurnTimers[room]);
-                clearInterval(questionTimers[room]);
+                clearInterval(playerTurnTimers[roomBuzzer]);
+                clearInterval(questionTimers[roomBuzzer]);
 
-                functions.deleteLobby(room);
-                socket.leave(room);
+                functions.deleteLobby(roomBuzzer);
+                socket.leave(roomBuzzer);
+            }
+
+            const roomManip = functions.getRoomManipulation(socket);
+            console.log(socket + "disconnected.")
+            if (roomManip) {
+                // Informiere den anderen Spieler im Raum über die Trennung
+                const otherPlayer = manipulationRooms[roomManip].find(id => id !== socket.id);
+                if (otherPlayer) {
+                    io.to(otherPlayer).emit('OPPONENT_DISCONNECTED');
+                }
+
+                functions.deleteLobby(roomManip);
+                socket.leave(roomManip);
             }
 
         });
@@ -304,11 +317,13 @@ function handleSocketEvents(io) {
                     setTimeout(() => {
                         io.to(socket.id).emit('ENABLE_INPUT_MANIPULATION', {
                             code: changedCode[room][otherPlayer].code,
-                            answer: changedCode[room][otherPlayer].expectedOutput
+                            answer: changedCode[room][otherPlayer].expectedOutput,
+                            input: changedCode[room][otherPlayer].inputParameterQuestion
                         });
                         io.to(otherPlayer).emit('ENABLE_INPUT_MANIPULATION', {
                             code: changedCode[room][socket.id].code,
-                            answer: changedCode[room][socket.id].expectedOutput
+                            answer: changedCode[room][socket.id].expectedOutput,
+                            input: changedCode[room][socket.id].inputParameterQuestion
                         });
                     }, 1000); // 1000 milliseconds = 1 second
                 }
