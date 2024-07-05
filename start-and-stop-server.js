@@ -13,6 +13,12 @@ server.stdout.on('data', (data) => {
 
 server.stderr.on('data', (data) => {
     console.error(`stderr: ${data}`);
+    process.exit(1);
+});
+
+server.on('exit', (code) => {
+    console.log(`Server exited with code ${code}`);
+    process.exit(code); // Beenden Sie den Prozess mit dem Exit-Code des Servers
 });
 
 // Stop the server after 5 seconds
