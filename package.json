@@ -1,6 +1,7 @@
 {
   "scripts": {
-    "start": "node ./src/server.js"
+    "start": "node ./src/server.js",
+    "start-and-stop": "node start-and-stop-server.js"
   },
   "dependencies": {
     "bcrypt": "^5.1.1",
