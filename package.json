@@ -1,8 +1,12 @@
 {
   "scripts": {
-    "start": "node ./src/server.js"
+    "start": "node ./src/server.js",
+    "start-and-stop": "node start-and-stop-server.js"
   },
   "dependencies": {
+    "bcrypt": "^5.1.1",
+    "body-parser": "^1.20.2",
+    "cors": "^2.8.5",
     "express": "^4.19.2",
     "pg": "^8.11.5",
     "socket.io": "^4.7.5",
