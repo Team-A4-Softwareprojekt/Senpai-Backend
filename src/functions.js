@@ -1,19 +1,23 @@
 const {Client} = require('pg');
 
-// Verbindungsinformationen
+// Create a new PostgreSQL client
 const client = new Client({
     user: 'lernplattformdb_user',
     host: 'dpg-cotl9a7109ks73an4iug-a.frankfurt-postgres.render.com',
     database: 'lernplattformdb',
     password: 'z46dQYVIYnVeGf19tLgyWCg4g2Uo0u4n',
-    port: 5432, // Standardport für PostgreSQL,
+    port: 5432,
     ssl: true
 });
 
 let ioInstance;
 
+/**
+ * Initializes the IO instance for socket communication.
+ * @param {object} io - The socket.io instance.
+ */
 function initializeIO(io) {
-    ioInstance = io; // io-Instanz setzen
+    ioInstance = io;
 }
 
 client.connect(undefined)
@@ -45,17 +49,22 @@ const {
 //-----------------------------------------------------------------------------------------------------------------------------------------------//
 //-----------------------------------------------------< ADDITIONAL FUNCTIONS: Buzzer Game >-----------------------------------------------------//
 //-----------------------------------------------------------------------------------------------------------------------------------------------//
+/**
+ * Retrieves the room identifier based on the socket ID.
+ * @param {object} socket - The socket instance.
+ * @returns {string|null} The room identifier if found, otherwise null.
+ */
 function getRoom(socket) {
     return Object.keys(rooms).find(room => rooms[room].includes(socket.id));
 }
 
-
+/**
+ * Fetches a gap text question from the database and invokes a callback with the question data.
+ * @param {function} callback - Callback function to handle fetched question data.
+ */
 function getGapTextFromDB(callback) {
     const selectedTable = 'gaptextquestion';
 
-    console.log(selectedTable)
-
-    // Query basierend auf der ausgewählten Tabelle erstellen
     const query = `SELECT *
                        FROM gaptextquestion
                        ORDER BY RANDOM() LIMIT 1`;
@@ -73,20 +82,23 @@ function getGapTextFromDB(callback) {
     });
 }
 
+/**
+ * Fetches a multiple-choice question from the database and invokes a callback with the question data.
+ * @param {function} callback - Callback function to handle fetched question data.
+ * @param {string} room - The room identifier.
+ */
 function getMultipleChoiceFromDB(callback, room) {
     const selectedTable = 'multiplechoicequestion';
-    console.log(selectedTable);
 
-    // Initialisiere usedQuestionIds für den Raum, falls noch nicht vorhanden
+    // initialise the set of used question IDs for the room
     if (!usedQuestionIds[room]) {
         usedQuestionIds[room] = new Set();
     }
 
-    // Erstelle die Liste der bereits verwendeten Frage-IDs für den Raum
+    // create a string of used question IDs for the query
     const usedIdsArray = Array.from(usedQuestionIds[room]);
     const usedIdsString = usedIdsArray.length > 0 ? usedIdsArray.join(',') : '-1';
 
-    // Query basierend auf der ausgewählten Tabelle erstellen
     const query = `SELECT *
                        FROM multiplechoicequestion
                        WHERE mcquestionid NOT IN (${usedIdsString})
@@ -99,9 +111,7 @@ function getMultipleChoiceFromDB(callback, room) {
         }
         if (result.rows.length > 0) {
             const question = result.rows[0];
-            console.log("Selected question ID:", question.mcquestionid);
             usedQuestionIds[room].add(question.mcquestionid);
-            console.log("Used question IDs for room", room, ":", Array.from(usedQuestionIds[room]));
             callback(question, selectedTable, room);
         } else {
             console.error("No question found in the database.");
@@ -109,12 +119,15 @@ function getMultipleChoiceFromDB(callback, room) {
     });
 }
 
+/**
+ * Sends a question to clients in the specified socket room.
+ * @param {object} socket - The socket instance.
+ */
 function sendQuestionToClient(socket) {
     const room = getRoom(socket);
     if (!room) return;
 
     roundCounter[room] = (roundCounter[room] || 0) + 1
-    console.log("sendQuestionToClient(): " + roundCounter[room])
 
     getMultipleChoiceFromDB((question, table, room) => {
         questions[room] = question;
@@ -122,11 +135,8 @@ function sendQuestionToClient(socket) {
         tableGLOBAL[room] = table;
 
         if (table === "multiplechoicequestion") {
-            //io.to(room).emit('SHOW_QUESTION_MULTIPLE_CHOICE', question);
             ioInstance.to(room).emit('SET_BUZZER_QUESTION', question);
-            console.log(rooms[room])
         } else {
-            //io.to(room).emit('SHOW_QUESTION_GAP_TEXT', question);
             ioInstance.to(room).emit('SET_BUZZER_QUESTION', question);
         }
     }, room);
@@ -137,7 +147,10 @@ function sendQuestionToClient(socket) {
 
 }
 
-
+/**
+ * Resets the question and answer state for a room.
+ * @param {object} socket - The socket instance.
+ */
 function resetRoomQuestion(socket) {
     const room = getRoom(socket);
 
@@ -161,31 +174,35 @@ function resetRoomQuestion(socket) {
     }
 }
 
-// Funktion, um den Timer zu starten
+/**
+ * Starts a timer for the buzzer game.
+ * @param {object} socket - The socket instance.
+ * @returns {NodeJS.Timeout} The timer instance.
+ */
 function startTimerBuzzer(socket) {
     const room = getRoom(socket);
     const otherPlayer = rooms[room].find(id => id !== socket.id);
 
-    // Bestimmen Sie die Dauer des Timers basierend auf der Rundenanzahl
+    // set the duration of the timer based on the round
     let timerDuration;
     if (roundCounter[room] === 1) {
-        timerDuration = 20000; // 20 Sekunden für die erste Runde
+        timerDuration = 20000;
     } else {
-        timerDuration = 23000; // 23 Sekunden für alle anderen Runden
+        timerDuration = 23000;
     }
 
-    let remainingSeconds = timerDuration / 1000; // Gesamte Anzahl von Sekunden
+    let remainingSeconds = timerDuration / 1000;
 
     const timer = setInterval(() => {
-        remainingSeconds--; // Reduziere die verbleibenden Sekunden um 1
+        remainingSeconds--;
 
-        // Sende die verbleibenden Sekunden an den Client
+        // send the remaining seconds to the client
         ioInstance.to(room).emit('BUZZER_TIMER_TICK', remainingSeconds);
 
         if (remainingSeconds <= 0) {
             const correctAnswer = questions[room].solution;
 
-            clearInterval(timer); // Stoppe den Timer, wenn die Zeit abgelaufen ist
+            clearInterval(timer);
             ioInstance.to(otherPlayer).emit('ENABLE_BUZZER');
 
             socket.emit('END_ROUND', "unentschieden", correctAnswer, playerPoints[room][socket.id], playerPoints[room][otherPlayer]);
@@ -193,42 +210,41 @@ function startTimerBuzzer(socket) {
 
             resetRoomQuestion(socket);
         }
-    }, 1000); // Wiederhole alle 1000ms (1 Sekunde)
+    }, 1000);
 
-    return timer; // Gib den Timer zurück, um darauf zugreifen zu können
+    return timer;
 }
 
-// Funktion, um den Timer für den Spielerzug zu starten
+/**
+ * Starts a timer for player turn in the buzzer game.
+ * @param {object} socket - The socket instance.
+ * @returns {NodeJS.Timeout} The timer instance.
+ */
 function startPlayerTurnTimer(socket) {
     const room = getRoom(socket);
 
-    //answers[room] = answers[room] || {};
-
-    let remainingSeconds = 5; // Anzahl von Sekunden für den Spielerzug
+    let remainingSeconds = 5;
 
     const timer = setInterval(() => {
-        remainingSeconds--; // Reduziere die verbleibenden Sekunden um 1
+        remainingSeconds--;
 
-        // Sende die verbleibenden Sekunden an den Client
         ioInstance.to(room).emit('PLAYER_TURN_TIMER_TICK', remainingSeconds);
 
         if (remainingSeconds <= 0) {
-            clearInterval(timer); // Stoppe den Timer, wenn die Zeit abgelaufen ist
+            clearInterval(timer);
 
             answers[room][socket.id] = 'empty';
             const otherPlayer = rooms[room].find(id => id !== socket.id);
             const correctAnswer = questions[room].solution;
             const bothAnswered = answers[room][socket.id] && answers[room][otherPlayer];
 
-            // Hier die angepasste Logik bei Ablauf des Timers
-            if (bothAnswered) {
-                // beide haben falsch geantwortet
+            if (bothAnswered) { // both players have answered
                 ioInstance.to(otherPlayer).emit('ENABLE_BUZZER');
                 socket.emit('END_ROUND', "unentschieden", correctAnswer, playerPoints[room][socket.id], playerPoints[room][otherPlayer]);
                 ioInstance.to(otherPlayer).emit('END_ROUND', "unentschieden", correctAnswer, playerPoints[room][otherPlayer], playerPoints[room][socket.id]);
                 resetRoomQuestion(socket);
             } else {
-                // aktueller Spieler hat falsch geantwortet, der andere Spieler darf
+                // player did not answer in time, other player gets the chance to answer
                 playerPoints[room][socket.id] -= 1;
                 socket.emit('WRONG_ANSWER');
                 ioInstance.to(otherPlayer).emit('ENABLE_BUZZER');
@@ -236,11 +252,15 @@ function startPlayerTurnTimer(socket) {
 
             }
         }
-    }, 1000); // Wiederhole alle 1000ms (1 Sekunde)
+    }, 1000);
 
-    return timer; // Gib den Timer zurück, um darauf zugreifen zu können
+    return timer;
 }
 
+/**
+ * Starts a countdown timer for the game start in the buzzer game.
+ * @param {object} socket - The socket instance.
+ */
 function startGameCountdownBuzzer(socket) {
     const room = getRoom(socket);
     let remainingSeconds = 4;
@@ -251,8 +271,6 @@ function startGameCountdownBuzzer(socket) {
         if (remainingSeconds <= 0) {
             clearInterval(timer);
 
-            // Starte den Timer
-
             ioInstance.to(room).emit('BUZZER_QUESTION_TYPE', tableGLOBAL[room]);
             questionTimers[room] = startTimerBuzzer(socket);
         }
@@ -262,7 +280,11 @@ function startGameCountdownBuzzer(socket) {
     }, 1000);
 }
 
-
+/**
+ * Decreases player lives if the player is not subscribed.
+ * @param {string} playerName - The name of the player.
+ * @returns {Promise<void>} A promise that resolves when lives are updated.
+ */
 async function decreaseLivesIfNotSubscribed(playerName) {
     try {
         const today = new Date();
@@ -286,17 +308,25 @@ async function decreaseLivesIfNotSubscribed(playerName) {
 //-------------------------------------------------< ADDITIONAL FUNCTIONS: Manipulation Game >-------------------------------------------------//
 //---------------------------------------------------------------------------------------------------------------------------------------------//
 
-
+/**
+ * Retrieves the room identifier for the manipulation game based on the socket ID.
+ * @param {object} socket - The socket instance.
+ * @returns {string|null} The room identifier if found, otherwise null.
+ */
 function getRoomManipulation(socket) {
     return Object.keys(manipulationRooms).find(room => manipulationRooms[room].includes(socket.id));
 }
 
+/**
+ * Fetches two random manipulation questions from the database and invokes a callback with the question data.
+ * @param {function} callback - Callback function to handle fetched question data.
+ * @param {object} callback.question1 - The first fetched manipulation question.
+ * @param {string} callback.table - The name of the table from which the questions were fetched.
+ * @param {object} callback.question2 - The second fetched manipulation question.
+ */
 function getCodeFromDB(callback) {
     const selectedTable = 'manipulation';
 
-    console.log(selectedTable);
-
-    // Query basierend auf der ausgewählten Tabelle erstellen
     const query = `SELECT *
                        FROM manipulation
                        ORDER BY RANDOM() LIMIT 2`;
@@ -314,6 +344,10 @@ function getCodeFromDB(callback) {
     });
 }
 
+/**
+ * Fetches manipulation codes from the database and sends them to clients in the specified socket room.
+ * @param {object} socket - The socket instance.
+ */
 function sendQuestionToClientManipulation(socket) {
     const room = getRoomManipulation(socket);
     if (!room) return;
@@ -329,9 +363,7 @@ function sendQuestionToClientManipulation(socket) {
         tableGLOBAL[room] = table;
 
         if (table === "manipulation") {
-            console.log(manipulationRooms[room]);
             const otherPlayer = manipulationRooms[room].find(id => id !== socket.id);
-            // Sende 'ENABLE_INPUT_MANIPULATION' an den anderen Spieler
             socket.to(otherPlayer).emit('SET_MANIPULATION_QUESTION', question);
             socket.emit('SET_MANIPULATION_QUESTION', question2);
 
@@ -339,6 +371,10 @@ function sendQuestionToClientManipulation(socket) {
     });
 }
 
+/**
+ * Starts a countdown timer for the game start in the manipulation game.
+ * @param {object} socket - The socket instance.
+ */
 function startGameCountdownManipulation(socket) {
     const room = getRoomManipulation(socket);
     let remainingSeconds = 4;
@@ -348,17 +384,17 @@ function startGameCountdownManipulation(socket) {
 
         if (remainingSeconds <= 0) {
             clearInterval(timer);
-
-            // Starte den Timer
             ioInstance.to(room).emit('MANIPULATION_QUESTION_TYPE', tableGLOBAL[room]);
-            //questionTimers[room] = startTimerManipulation(socket);
         }
-        console.log("Countdown: " + remainingSeconds);
         ioInstance.to(room).emit('MANIPULATION_COUNTDOWN', remainingSeconds);
 
     }, 1000);
 }
 
+/**
+ * Deletes all data related to a specific lobby/room.
+ * @param {string} room - The room identifier.
+ */
 function deleteLobby(room) {
     console.log("Lobby deleted.")
 
@@ -369,8 +405,8 @@ function deleteLobby(room) {
     delete playerPoints[room];
     delete playerNames[room];
     delete playerReady[room];
-    delete questionTimers[room]; // Speichert die Timer für die Fragen pro Raum
-    delete playerTurnTimers[room]; // Speichert die Timer für die Spielerzüge pro Raum
+    delete questionTimers[room];
+    delete playerTurnTimers[room];
     delete tableGLOBAL[room];
     delete playerPointsManipulation[room];
     delete playerNamesManipulation[room];

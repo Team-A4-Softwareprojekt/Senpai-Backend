@@ -56,8 +56,8 @@ function handleSocketEvents(io) {
                 const otherPlayer = rooms[room].find(id => id !== socket.id);
                 answers[room] = answers[room] || {};
 
-                io.to(otherPlayer).emit('Buzzer_GameFound', true);
-                socket.emit('Buzzer_GameFound', true);
+                io.to(otherPlayer).emit('Buzzer_GameFound');
+                io.to(socket.id).emit('Buzzer_GameFound');
 
                 functions.startGameCountdownBuzzer(socket);
                 functions.sendQuestionToClient(socket)
@@ -110,7 +110,7 @@ function handleSocketEvents(io) {
             const room = functions.getRoom(socket);
             if (!room) return;
 
-            // Stoppe den Timer für die Spielrunde
+            // Clear the question timer for the room
             clearInterval(playerTurnTimers[room]);
             clearInterval(questionTimers[room]);
 
@@ -118,12 +118,12 @@ function handleSocketEvents(io) {
             io.to(otherPlayer).emit('DISABLE_BUZZER');
 
 
-            // Informiere den Gegner, dass der Buzzer zuerst gedrückt wurde
+            // Other player gets notified when the opponent buzzers
             if (!answers[room][otherPlayer]) {
                 io.to(otherPlayer).emit('OPPONENT_BUZZERED');
             }
 
-            // Starte den Timer für den Spielerzug
+            // Start the timer for the player who buzzers
             playerTurnTimers[room] = functions.startPlayerTurnTimer(socket);
         });
 
@@ -138,19 +138,15 @@ function handleSocketEvents(io) {
 
             clearInterval(playerTurnTimers[room]);
 
-            //hier muss sichergestellt werden, dass über questions[room].correctAnswer auf die Antwort zugegriffen werden kann
             const correctAnswer = questions[room].solution;
-            //answers[room] = answers[room] || {};
             answers[room][socket.id] = answer;
 
             const otherPlayer = rooms[room].find(id => id !== socket.id);
             const otherPlayerSocket = io.sockets.sockets.get(otherPlayer);
             const bothAnswered = answers[room][socket.id] && answers[room][otherPlayer];
 
-            if (answer === correctAnswer) { //antwort richtig
-
-                //TODO: ENABLE_BUZZER scheint in den ersten zwei Bedingungen (if und if-else) überflüssig zu sein
-                // bitte testen
+            // Submitted answer is correct
+            if (answer === correctAnswer) {
 
                 socket.emit('CORRECT_ANSWER');
                 console.log("correct answer")
@@ -166,7 +162,7 @@ function handleSocketEvents(io) {
                 io.to(otherPlayer).emit('END_ROUND', playerNames[socket.id], correctAnswer, playerPoints[room][otherPlayer], playerPoints[room][socket.id]);
                 functions.resetRoomQuestion(socket);
 
-            } else if (bothAnswered) {  //beide falsch?
+            } else if (bothAnswered) { // Both players answerer incorrectly
 
                 io.to(otherPlayer).emit('ENABLE_BUZZER');
                 playerPoints[room][socket.id] -= 1;
@@ -177,7 +173,7 @@ function handleSocketEvents(io) {
 
                 console.log("BEIDE GEANTWORTET - DEBUGGING")
 
-            } else { //antwort falsch, gegenspieler darf
+            } else { // Submitted answer is incorrect, other player gets the chance to answer
                 playerPoints[room][socket.id] -= 1;
                 socket.emit('WRONG_ANSWER');
                 io.to(otherPlayer).emit('ENABLE_BUZZER');
@@ -205,7 +201,8 @@ function handleSocketEvents(io) {
             const roomBuzzer = functions.getRoom(socket);
             console.log(socket + "disconnected.")
             if (roomBuzzer) {
-                // Informiere den anderen Spieler im Raum über die Trennung
+
+                // Inform the other player in the room about the disconnection
                 const otherPlayer = rooms[roomBuzzer].find(id => id !== socket.id);
                 if (otherPlayer) {
                     io.to(otherPlayer).emit('OPPONENT_DISCONNECTED');
@@ -221,7 +218,8 @@ function handleSocketEvents(io) {
             const roomManip = functions.getRoomManipulation(socket);
             console.log(socket + "disconnected.")
             if (roomManip) {
-                // Informiere den anderen Spieler im Raum über die Trennung
+
+                // Inform the other player in the room about the disconnection
                 const otherPlayer = manipulationRooms[roomManip].find(id => id !== socket.id);
                 if (otherPlayer) {
                     io.to(otherPlayer).emit('OPPONENT_DISCONNECTED');
@@ -260,8 +258,8 @@ function handleSocketEvents(io) {
 
             if (manipulationRooms[roomManipulation].length === 2) {
                 const otherPlayer = manipulationRooms[roomManipulation].find(id => id !== socket.id);
-                io.to(otherPlayer).emit('Manipulation_GameFound', true);
-                socket.emit('Manipulation_GameFound', true);
+                io.to(otherPlayer).emit('Manipulation_GameFound');
+                io.to(socket.id).emit('Manipulation_GameFound');
 
                 functions.startGameCountdownManipulation(socket);
                 functions.sendQuestionToClientManipulation(socket);
@@ -362,6 +360,7 @@ function handleSocketEvents(io) {
             hasPlayerFinished[room] = hasPlayerFinished[room] || {};
             hasPlayerFinished[room][socket.id] = true;
 
+            //Starting a new round
             if (otherPlayer) {
                 if (hasPlayerFinished[room][otherPlayer]) {
                     if (roundEndManipulationCounter[room] < 2) {
