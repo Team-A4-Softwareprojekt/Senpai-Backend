@@ -448,24 +448,22 @@ router.post('/streakForToday', (request, response) => {
  * @apiSuccess {String} message Success or error message.
  */
 router.post('/setMissedStreak', (request, response) => {
-    const { playerName } = request.body; // Extrahiere den Benutzernamen aus dem Anfragekörper
+    const { playerName } = request.body;
 
-    // Aktualisiere das 'missedstreak'-Feld des Spielers in der Datenbank auf das aktuelle Datum
     client.query('UPDATE player SET missedstreak = CURRENT_DATE WHERE playername = $1', [playerName], (err, res) => {
-        if (err) { // Falls ein Fehler bei der Abfrage auftritt
-            console.error('Error executing query', err.stack); // Logge den Fehler
-            return response.status(500).json({ success: false, message: 'Database query error' }); // Sende eine Fehlermeldung an den Client
+        if (err) {
+            console.error('Error executing query', err.stack);
+            return response.status(500).json({ success: false, message: 'Database query error' });
         }
 
-        if (res.rowCount === 0) { // Falls keine Zeilen aktualisiert wurden (Spieler nicht gefunden)
-            return response.status(404).json({ success: false, message: 'Player not found' }); // Sende eine 404-Fehlermeldung an den Client
+        if (res.rowCount === 0) {
+            return response.status(404).json({ success: false, message: 'Player not found' });
         }
 
-        // Sende eine Erfolgsmeldung an den Client
         response.status(200).json({ success: true, message: 'Missed streak date updated successfully!' });
     });
 });
 
-module.exports = router; // Exportiere den Router, damit er in anderen Teilen der Anwendung verwendet werden kann
+module.exports = router;
 
 
