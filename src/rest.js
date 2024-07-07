@@ -43,7 +43,7 @@ router.post('/register', (req, res) => {
 
         if (result.rows.length > 0) {
             // If a user with the same name or email exists
-            return res.status(409).json({ success: false, message: 'Username or email already exists' });
+            return res.status(409).json({ success: false, message: 'Benutzername oder E-Mail existiert bereits.' });
         }
 
         // Hash the password with bcrypt
